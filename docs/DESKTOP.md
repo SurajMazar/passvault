@@ -252,7 +252,7 @@ Limitations:
 Prerequisites:
 
 - macOS 14+ (the Neutralinojs 6.10 binaries have `minos 14.0`);
-- Node 22 and pnpm 10;
+- Node 24 LTS (`.nvmrc`) and pnpm 10;
 - Go 1.25 and the Xcode Command Line Tools (`clang`, `lipo`, `codesign`, `sips`, `iconutil`, `hdiutil`);
 - the `neu` CLI v11 (`npm i -g @neutralinojs/neu`).
 

@@ -1,7 +1,7 @@
 # PassVault web dashboard: static build served by Caddy (TLS + /api proxy).
 # Build from the REPOSITORY ROOT:
 #   podman build -f deploy/web.Containerfile --build-arg VITE_API_URL=https://vault.example.com -t passvault-web .
-ARG NODE_IMAGE=docker.io/library/node:22-alpine
+ARG NODE_IMAGE=docker.io/library/node:24-alpine
 ARG CADDY_IMAGE=docker.io/library/caddy:2.10-alpine
 
 FROM ${NODE_IMAGE} AS build

@@ -32,7 +32,7 @@
     "@passvault/sync": "workspace:*",
     "@passvault/types": "workspace:*",
     "@passvault/vault-core": "workspace:*",
-    "@types/node": "22.20.5",
+    "@types/node": "24.19.1",
     "hash-wasm": "4.12.0",
     "otpauth": "9.5.2",
     "playwright": "1.64.0",

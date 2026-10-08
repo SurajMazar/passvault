@@ -16,7 +16,7 @@ SSH terminal and an SSH agent.
 
 ## Quick start (development)
 
-Requirements: Node 22, pnpm 10, Go 1.25 (desktop helper), Podman (or a local
+Requirements: Node 24 LTS (see `.nvmrc`), pnpm 10, Go 1.25 (desktop helper), Podman (or a local
 PostgreSQL 14+), macOS for the desktop app.
 
 ```bash

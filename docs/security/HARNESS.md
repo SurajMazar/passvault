@@ -18,7 +18,7 @@ pnpm --filter @passvault/security-harness security auth authorization    # selec
 pnpm --filter @passvault/security-harness security:crypto                # one suite (also :auth, :sync, …)
 ```
 
-Requirements: Node 22 + pnpm, Podman (or Docker with `PV_SEC_CONTAINER=docker`),
+Requirements: Node 24 LTS + pnpm, Podman (or Docker with `PV_SEC_CONTAINER=docker`),
 Playwright Chromium (`pnpm --filter @passvault/security-harness exec playwright install chromium`),
 Go 1.25 for the native/ssh suites, macOS for Keychain/desktop runtime checks,
 and the local PostgreSQL used by the API tests (`bash scripts/dev-postgres.sh start`).

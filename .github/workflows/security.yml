@@ -31,7 +31,7 @@ jobs:
           version: 10.12.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: Lockfile is consistent
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Audit production dependencies (fails on high/critical)
@@ -79,7 +79,7 @@ jobs:
           version: 10.12.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -110,7 +110,7 @@ jobs:
           version: 10.12.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build

@@ -5,7 +5,7 @@
 # Works with podman/buildah (and Docker). Only explicit paths are copied, so
 # local .env files, node_modules and .dev/ never enter the image.
 
-ARG NODE_IMAGE=docker.io/library/node:22-alpine
+ARG NODE_IMAGE=docker.io/library/node:24-alpine
 
 # ---------------------------------------------------------------- base
 FROM ${NODE_IMAGE} AS base
