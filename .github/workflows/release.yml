@@ -28,8 +28,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to create (e.g. v0.1.0). Must match the app versions.'
+        description: 'Release tag to create (e.g. v0.1.0). Must match the versions of the apps that are built.'
         required: true
+      build_apps:
+        description: 'Rebuild the macOS app and the extension even if their code did not change'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,22 +46,56 @@ env:
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
+  checks:
+    name: Tests (lint, typecheck, unit, API e2e, Go)
+    uses: ./.github/workflows/checks.yml
+
   verify:
-    name: Verify versions and run tests
+    name: Versions and what changed since the last release
+    needs: checks
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.v.outputs.version }}
       prerelease: ${{ steps.v.outputs.prerelease }}
+      previous: ${{ steps.changes.outputs.previous }}
+      desktop: ${{ steps.changes.outputs.desktop }}
+      extension: ${{ steps.changes.outputs.extension }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - id: changes
+        name: Rebuild only the apps whose code changed
+        env:
+          FORCE: ${{ github.event.inputs.build_apps || 'false' }}
+        run: |
+          # previous release = highest v*.*.* tag below this one
+          prev="$(git tag --list 'v*.*.*' | grep -vx "$TAG" | { cat; echo "$TAG"; } | sort -V | grep -B1 -x "$TAG" | head -1 | grep -vx "$TAG" || true)"
+          echo "previous=$prev" >> "$GITHUB_OUTPUT"
+          if [ -z "$prev" ] || [ "$FORCE" = "true" ]; then
+            desktop=true; extension=true
+            echo "No previous release (or forced): building both apps."
+          else
+            changed="$(git diff --name-only "$prev" HEAD)"
+            # shared packages bundled into both apps
+            shared='^packages/'
+            desktop=false; extension=false
+            echo "$changed" | grep -Eq "^(apps/desktop/|native/desktop-helper/)|$shared" && desktop=true
+            echo "$changed" | grep -Eq "^apps/browser-extension/|$shared" && extension=true
+            echo "Changes since $prev: desktop=$desktop extension=$extension"
+          fi
+          echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
+          echo "extension=$extension" >> "$GITHUB_OUTPUT"
       - id: v
-        name: Tag must match package versions
+        name: Tag must match the versions of the apps being built
+        env:
+          DESKTOP: ${{ steps.changes.outputs.desktop }}
+          EXTENSION: ${{ steps.changes.outputs.extension }}
         run: |
           version="${TAG#v}"
-          for p in apps/desktop/package.json apps/browser-extension/package.json; do
-            pv=$(node -p "require('./$p').version")
-            [ "$pv" = "$version" ] || { echo "::error::$p is $pv but the tag is $TAG"; exit 1; }
-          done
+          check() { pv=$(node -p "require('./$1').version"); [ "$pv" = "$version" ] || { echo "::error::$1 is $pv but the tag is $TAG (bump it or skip that app)"; exit 1; }; }
+          [ "$DESKTOP" = "true" ] && check apps/desktop/package.json
+          [ "$EXTENSION" = "true" ] && check apps/browser-extension/package.json
           echo "version=$version" >> "$GITHUB_OUTPUT"
           case "$version" in *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;; *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;; esac
       - name: Production URL is configured
@@ -65,23 +103,11 @@ jobs:
           PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
         run: |
           case "$PV_PRODUCTION_URL" in https://*) ;; *) echo "::error::Set the repository variable PV_PRODUCTION_URL to your https server URL"; exit 1 ;; esac
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-        with:
-          version: 10.12.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build
-      - name: Typecheck
-        run: pnpm -r --filter '!@passvault/api' run typecheck
-      - name: Client unit tests
-        run: pnpm -r --workspace-concurrency=1 --filter './packages/*' --filter @passvault/browser-extension --filter @passvault/desktop run test
 
   extension:
     name: Chrome extension
     needs: verify
+    if: needs.verify.outputs.extension == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -145,6 +171,7 @@ jobs:
   desktop:
     name: macOS desktop app
     needs: verify
+    if: needs.verify.outputs.desktop == 'true'
     runs-on: macos-14
     env:
       SIGNING: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.APPLE_TEAM_ID != '' }}
@@ -243,55 +270,83 @@ jobs:
   publish:
     name: GitHub release
     needs: [verify, extension, desktop]
+    # runs when the apps were built or deliberately skipped (unchanged), never after a failure
+    if: >-
+      always() && needs.verify.result == 'success' &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.extension.result) &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.desktop.result)
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - if: needs.verify.outputs.desktop == 'true' || needs.verify.outputs.extension == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
           merge-multiple: true
       - name: Checksums
         run: |
-          cd artifacts
-          sha256sum -- * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          mkdir -p artifacts && cd artifacts
+          if ls -- * >/dev/null 2>&1; then sha256sum -- * > SHA256SUMS.txt; cat SHA256SUMS.txt; fi
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ needs.verify.outputs.prerelease }}
           PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+          PREV: ${{ needs.verify.outputs.previous }}
+          DESKTOP: ${{ needs.verify.outputs.desktop }}
+          EXTENSION: ${{ needs.verify.outputs.extension }}
         run: |
-          cat > notes.md <<EOF
-          ## PassVault ${TAG}
-
-          Server: ${PV_PRODUCTION_URL}
-
-          | Artifact | |
-          |---|---|
-          | \`PassVault-*-macos-universal*.dmg\` | macOS 14+ (Apple silicon and Intel). Files marked **UNSIGNED** are not notarized. |
-          | \`passvault-extension-*.zip\` | Chrome / Edge / Brave extension (Manifest V3). |
-          | \`SHA256SUMS.txt\` | Checksums of every artifact. |
-
-          ### Install
-
-          **Verify first:** \`shasum -a 256 -c SHA256SUMS.txt --ignore-missing\` → every file must say OK.
-
-          **macOS app**
-          1. Open the .dmg and drag **PassVault** to **Applications**, then open it.
-          2. UNSIGNED build: macOS blocks the first launch — open **System Settings → Privacy & Security**, click **Open Anyway** next to "PassVault was blocked". (Touch ID unlock needs a signed build.)
-          3. The sign-in screen shows **Server · Production**; **Change** switches to local development. Sign in with your email, master password and authenticator code.
-
-          **Chrome extension**
-          1. Unzip \`passvault-extension-*.zip\` into a folder you keep (Chrome loads it from there).
-          2. Open \`chrome://extensions\`, enable **Developer mode**, click **Load unpacked**, choose the folder, and pin PassVault.
-          3. Sign in. **Change** on the sign-in screen selects production, local development or another https server.
-          4. Updating: unzip the new version over the same folder and click **reload** on the extension card.
-
-          New here? Create your account in the web dashboard at ${PV_PRODUCTION_URL} first. Full guide: [docs/INSTALL.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/INSTALL.md).
-
-          PassVault has not yet been independently audited — see docs/SECURITY_REVIEW.md and docs/security/.
-          EOF
+          repo="https://github.com/${GITHUB_REPOSITORY}"
+          {
+            echo "## PassVault ${TAG}"
+            echo
+            echo "Server: ${PV_PRODUCTION_URL}"
+            echo
+            echo "| Component | In this release |"
+            echo "|---|---|"
+            echo "| Server (API + web dashboard) | deployed by the Deploy workflow |"
+            if [ "$DESKTOP" = "true" ]; then
+              echo "| macOS app | \`PassVault-*-macos-universal*.dmg\` — macOS 14+, Apple silicon and Intel. **UNSIGNED** files are not notarized. |"
+            else
+              echo "| macOS app | unchanged — use the one from [${PREV}](${repo}/releases/tag/${PREV}) |"
+            fi
+            if [ "$EXTENSION" = "true" ]; then
+              echo "| Chrome extension | \`passvault-extension-*.zip\` — Chrome / Edge / Brave (Manifest V3) |"
+            else
+              echo "| Chrome extension | unchanged — use the one from [${PREV}](${repo}/releases/tag/${PREV}) |"
+            fi
+            if [ "$DESKTOP" = "true" ] || [ "$EXTENSION" = "true" ]; then
+              echo
+              echo "### Install"
+              echo
+              echo "**Verify first:** \`shasum -a 256 -c SHA256SUMS.txt --ignore-missing\` → every file must say OK."
+            fi
+            if [ "$DESKTOP" = "true" ]; then
+              echo
+              echo "**macOS app**"
+              echo "1. Open the .dmg and drag **PassVault** to **Applications**, then open it."
+              echo "2. UNSIGNED build: macOS blocks the first launch — open **System Settings → Privacy & Security** and click **Open Anyway** next to \"PassVault was blocked\". (Touch ID unlock needs a signed build.)"
+              echo "3. The sign-in screen shows **Server · Production**; **Change** switches to local development. Sign in with your email, master password and authenticator code."
+              echo "4. Updating: quit PassVault and replace the app in Applications."
+            fi
+            if [ "$EXTENSION" = "true" ]; then
+              echo
+              echo "**Chrome extension**"
+              echo "1. Unzip \`passvault-extension-*.zip\` into a folder you keep (Chrome loads it from there)."
+              echo "2. Open \`chrome://extensions\`, enable **Developer mode**, click **Load unpacked**, choose the folder, and pin PassVault."
+              echo "3. Sign in. **Change** on the sign-in screen selects production, local development or another https server."
+              echo "4. Updating: unzip the new version over the same folder and click **reload** on the extension card."
+            fi
+            echo
+            echo "New here? Create your account in the web dashboard at ${PV_PRODUCTION_URL} first. Full guide: [docs/INSTALL.md](${repo}/blob/${TAG}/docs/INSTALL.md)."
+            if [ -n "$PREV" ]; then echo; echo "Changes since ${PREV}: ${repo}/compare/${PREV}...${TAG}"; fi
+            echo
+            echo "PassVault has not yet been independently audited — see docs/SECURITY_REVIEW.md and docs/security/."
+          } > notes.md
+          cat notes.md
           flags=""
           [ "$PRERELEASE" = "true" ] && flags="--prerelease"
-          gh release create "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --title "PassVault $TAG" --notes-file notes.md --target "$GITHUB_SHA" $flags
+          files=()
+          for f in artifacts/*; do [ -f "$f" ] && files+=("$f"); done
+          gh release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --title "PassVault $TAG" --notes-file notes.md --target "$GITHUB_SHA" $flags

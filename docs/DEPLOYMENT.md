@@ -131,10 +131,14 @@ Settings → Secrets and variables → Actions:
 | Variable (optional) | `MAIL_FROM` | `PassVault <no-reply@vault.example.com>` |
 | Secret | `DEPLOY_SSH_KEY` | the private key above (`gh secret set DEPLOY_SSH_KEY < passvault-ci-deploy`, then delete the file) |
 | Secret | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` | your mail provider (port 587 + `SMTP_SECURE=false` for STARTTLS, or 465 + `true`) |
+| Secret (optional) | `DATABASE_URL` | `postgresql://USER:PASSWORD@HOST:5432/DB` — use another database/credentials than the ones `setup.sh` created. For PostgreSQL on the same host use `host.docker.internal` as HOST (and allow the user in `pg_hba.conf` from `172.16.0.0/12`). |
 
-The SMTP secrets are written into `/opt/passvault/.env` on every deploy (only
-the `SMTP_*`/`MAIL_FROM` keys are accepted; empty secrets keep the server's
-value). Change a secret, then run **Actions → Deploy → Run workflow** to apply it.
+`DATABASE_URL` and the SMTP secrets are written into `/opt/passvault/.env` on
+every deploy (only `DATABASE_URL`, `SMTP_*` and `MAIL_FROM` are accepted; empty
+or missing secrets keep the server's current value). Change a secret, then run
+**Actions → Deploy → Run workflow** to apply it. Every deploy runs pending
+Prisma migrations (`prisma migrate deploy`) against the configured database
+before the new version takes traffic.
 
 ### Releasing and deploying
 
@@ -142,12 +146,21 @@ value). Change a secret, then run **Actions → Deploy → Run workflow** to app
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
+Both workflows first run **Checks** (`checks.yml`: ESLint, typecheck, unit tests,
+API end-to-end tests on PostgreSQL, builds, dependency audit, Go vet/gofmt/race
+tests, secrets scan). Nothing is deployed or released if any check fails.
+
 - **Deploy** (`deploy.yml`): builds the API image and the web app, ships them
   over the restricted key, activates the release, rolls back automatically if
   the health check fails, and smoke-tests the public URL.
 - **Release** (`release.yml`): builds the macOS app and the Chrome extension for
   `PV_PRODUCTION_URL` and publishes them with checksums and installation notes
-  ([INSTALL.md](INSTALL.md)).
+  ([INSTALL.md](INSTALL.md)). An app is rebuilt only if its code changed since the
+  previous release tag (`apps/desktop` + `native/desktop-helper` + `packages/` for
+  the macOS app; `apps/browser-extension` + `packages/` for the extension);
+  otherwise the release notes point to the previous release's download. The tag
+  must match the `package.json` version of each app that is rebuilt. Run Release
+  manually with *build_apps* to force both (e.g. after a dependency-only update).
 
 Run **Deploy** manually for redeploys without a new version. (A release created
 from the Release workflow's manual trigger does not start Deploy automatically —

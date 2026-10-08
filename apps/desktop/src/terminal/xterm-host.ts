@@ -110,6 +110,7 @@ export class XtermHost implements TerminalHost {
   }
 
   writeNotice(connId: string, text: string) {
+    // eslint-disable-next-line no-control-regex -- strips control characters so notice text cannot inject terminal escapes
     this.entries.get(connId)?.term.write(`\r\n\x1b[2m${text.replace(/[\x00-\x1f\x7f]/g, '')}\x1b[0m\r\n`);
   }
 

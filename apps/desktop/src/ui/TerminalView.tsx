@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Plug, Plus, RefreshCw, ShieldAlert, SquareTerminal, Unplug, X } from 'lucide-react';
-import { Badge, Button, Dialog, EmptyState, EnvBadge, IconButton, Input, Kbd, Spinner, TypeIcon, cx } from '@passvault/ui';
+import { Badge, Button, Dialog, EmptyState, EnvBadge, Input, Kbd, Spinner, TypeIcon, cx } from '@passvault/ui';
 import { useSnapshot } from '@passvault/app';
 import type { TerminalTab } from '../desktop/controller';
 import { isSshConnection, type SshConnectionItem } from '../ssh/hops';

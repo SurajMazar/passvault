@@ -11,7 +11,7 @@ import {
   type RegistrationMaterial,
 } from '@passvault/crypto';
 import type * as T from '@passvault/types';
-import { Api, brief, type ApiResponse } from './http';
+import { type Api, brief, type ApiResponse } from './http';
 import { waitForMail } from './mail';
 import { registerSecret } from './results';
 

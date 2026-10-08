@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { deriveRecoveryKeys, initCrypto, newKdfParams, rewrapForNewPassword, wrapUserKeyForRecovery, generateRecoveryKey } from '@passvault/crypto';
+import { deriveRecoveryKeys, initCrypto, rewrapForNewPassword, wrapUserKeyForRecovery, generateRecoveryKey } from '@passvault/crypto';
 import { buildRegistration, freshTotp, loginAgain, newActor, reauth, registrationToken, totpAt, uniqueEmail, createRecord, type Actor } from '../lib/actors';
 import { brief, errCode, traffic, type ApiResponse } from '../lib/http';
 import { waitForMail } from '../lib/mail';
-import { assert, registerSecret } from '../lib/results';
+import { registerSecret } from '../lib/results';
 import { requireDisposable, type Suite } from '../lib/suite';
 import { vitestCheck } from '../lib/vitest';
 

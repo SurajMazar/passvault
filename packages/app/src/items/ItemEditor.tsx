@@ -12,7 +12,6 @@ import {
   URL_MATCH_MODES,
   type CustomField,
   type ItemPayload,
-  type ItemType,
 } from '@passvault/types';
 import { generatePassword } from '@passvault/crypto';
 import { isValidHost, isValidSshUsername, itemPayloadSchema } from '@passvault/validation';

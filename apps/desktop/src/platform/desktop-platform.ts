@@ -4,7 +4,7 @@ import type { HelperClient } from '../ipc/helper-client';
 import { HelperError } from '../ipc/helper-client';
 import type { NeutralinoLike } from '../neutralino';
 import { b64ToBytes, b64ToUtf8, bytesToB64, utf8ToB64 } from '../util/b64';
-import { DesktopClipboard } from './clipboard';
+import { type DesktopClipboard } from './clipboard';
 import { openExternalConfirmed, type ExternalLinkDeps } from './links';
 import { cachePrefix, neutralinoKV, neutralinoPrefs } from './storage';
 

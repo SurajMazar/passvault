@@ -1,7 +1,7 @@
 import { sodium, wipe } from './sodium.js';
 import { concatBytes, fromB64, fromBase32, toB64, toBase32, utf8, constantTimeEqual } from './encoding.js';
 import { decryptBytes, encryptBytes, hash256, randomKey, DecryptionError } from './envelope.js';
-import { KDF_CONTEXT, KdfParams, derivePasswordKeys, deriveSubkey, newKdfParams } from './kdf.js';
+import { KDF_CONTEXT, type KdfParams, derivePasswordKeys, deriveSubkey, newKdfParams } from './kdf.js';
 
 /**
  * Account key hierarchy (see docs/CRYPTO.md):

@@ -86,7 +86,7 @@ async function mailCode(email: string, after: number): Promise<string> {
 }
 
 const totps = new Map<string, TOTP>();
-let lastStep = new Map<string, number>();
+const lastStep = new Map<string, number>();
 /** Next TOTP code, waiting for a fresh time step so the server's replay protection is respected. */
 async function freshCode(email: string): Promise<string> {
   const t = totps.get(email)!;

@@ -8,7 +8,7 @@
 #                           api-image.tar.gz  (docker save of passvault-api:<release-id>)
 #                           web/              (built web app)
 #                           compose.yaml
-#                           runtime.env       (optional: SMTP_* / MAIL_FROM from GitHub secrets,
+#                           runtime.env       (optional: DATABASE_URL, SMTP_*, MAIL_FROM from GitHub secrets,
 #                                              merged into .env, then deleted)
 #   status                show the running container and the current release
 #   restart               restart the API with the current release (after editing .env)
@@ -44,7 +44,7 @@ activate() { # <release-id>: point web + current at a release and start its imag
   echo "$id is live"
 }
 
-# Merge CI-provided mail settings into .env. Only these keys are accepted, empty values are ignored
+# Merge CI-provided settings (database URL, mail) into .env. Only these keys are accepted, empty values are ignored
 # (removing a GitHub secret keeps the server's current value), and the file is deleted afterwards.
 merge_runtime_env() {
   local f="$1"
@@ -52,11 +52,13 @@ merge_runtime_env() {
   python3 - "$f" "$BASE/.env" <<'PY'
 import os, re, sys, tempfile
 src, dst = sys.argv[1], sys.argv[2]
-allowed = {"SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_REQUIRE_TLS", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM"}
+allowed = {"DATABASE_URL", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_REQUIRE_TLS", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM"}
 new = {}
 for line in open(src, encoding="utf-8").read().splitlines():
     m = re.match(r"^([A-Z_]+)=(.*)$", line)
     if m and m.group(1) in allowed and m.group(2) != "" and "\n" not in m.group(2):
+        if m.group(1) == "DATABASE_URL" and not re.match(r"^postgres(ql)?://[^\s]+$", m.group(2)):
+            sys.exit("DATABASE_URL must be a postgresql:// URL")
         new[m.group(1)] = m.group(2)
 def quote(v):
     # docker compose env_file syntax: plain when safe, '…' (literal) otherwise, "…" with escapes as a last resort
@@ -82,7 +84,7 @@ with os.fdopen(fd, "w", encoding="utf-8") as fh:
     fh.write("\n".join(out) + "\n")
 os.chmod(tmp, 0o600)
 os.replace(tmp, dst)
-print("mail settings updated from CI: " + (", ".join(sorted(new)) or "none"))
+print("settings updated from CI: " + (", ".join(sorted(new)) or "none"))
 PY
   rm -f "$f"
 }

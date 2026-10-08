@@ -21,6 +21,7 @@ afterEach(() => {
 
 /** Chrome serializes the function; prove it is self-contained by re-creating it from source. */
 function serialized<T extends (...a: never[]) => unknown>(fn: T): T {
+  // eslint-disable-next-line no-new-func -- re-creates the function from source exactly as chrome.scripting does
   return new Function(`return (${fn.toString()})`)() as T;
 }
 const fill = serialized(pvFillCredentials);

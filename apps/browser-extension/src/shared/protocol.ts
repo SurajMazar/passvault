@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ItemType, UrlMatchMode } from '@passvault/types';
-import { OFFSCREEN_TARGET } from './constants';
+import { type OFFSCREEN_TARGET } from './constants';
 
 export { OFFSCREEN_TARGET, POPUP_PORT } from './constants';
 

@@ -17,12 +17,16 @@ name: Deploy
 # Repository secrets (Settings → Secrets and variables → Actions → Secrets):
 #   DEPLOY_SSH_KEY       private key whose public half is in the server's authorized_keys as
 #                        restrict,command="/opt/passvault/bin/ci-deploy" …           [required]
+#   DATABASE_URL         optional: postgresql://USER:PASSWORD@HOST:5432/DB — overrides the database the
+#                        server was set up with (use host.docker.internal for the host's PostgreSQL)
 #   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD
-#                        mail provider; written into the server's /opt/passvault/.env on every
-#                        deploy (empty/missing secrets keep the server's current value)
+#                        mail provider
+# DATABASE_URL and SMTP_* are written into the server's /opt/passvault/.env on every deploy
+# (empty/missing secrets keep the server's current value). Pending Prisma migrations run on
+# every deploy (prisma migrate deploy) against that database.
 #
-# Server secrets (database password, MFA key, peppers) are generated on the
-# server by deploy/server/setup.sh and never pass through GitHub.
+# The MFA encryption key and peppers are generated on the server by
+# deploy/server/setup.sh and never pass through GitHub.
 
 on:
   push:
@@ -37,7 +41,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  checks:
+    name: Tests (lint, typecheck, unit, API e2e, Go)
+    uses: ./.github/workflows/checks.yml
+
   deploy:
+    name: Deploy to production
+    needs: checks
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -85,8 +95,9 @@ jobs:
           cp deploy/server/compose.yaml release/
           ls -la release
 
-      - name: Mail settings from secrets
+      - name: Settings from secrets (database, mail)
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
@@ -96,7 +107,7 @@ jobs:
         run: |
           umask 077
           : > release/runtime.env
-          for k in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD MAIL_FROM; do
+          for k in DATABASE_URL SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD MAIL_FROM; do
             v="${!k}"
             if [ -n "$v" ]; then
               case "$v" in *$'\n'*) echo "::error::$k must be a single line"; exit 1 ;; esac

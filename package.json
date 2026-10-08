@@ -13,16 +13,22 @@
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r --workspace-concurrency=1 run test",
-    "lint": "pnpm -r run lint",
+    "lint": "eslint .",
     "dev:db": "bash scripts/dev-postgres.sh start",
     "dev:api": "pnpm --filter @passvault/api dev",
-    "dev:web": "pnpm --filter @passvault/web dev"
+    "dev:web": "pnpm --filter @passvault/web dev",
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
-    "vitest": "3.2.7",
+    "@eslint/js": "9.39.5",
     "@types/node": "22.20.5",
-    "tsx": "4.20.6"
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "3.2.7"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
