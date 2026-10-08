@@ -1,5 +1,6 @@
 # PassVault API on a shared host (nginx + PostgreSQL already installed).
-# Managed by deploy/server/ci-deploy.sh; secrets live in /opt/passvault/.env (0600, never in git).
+# Applied by deploy/server/apply.sh on every deploy; /opt/passvault/.env (0600) is written by the
+# Deploy workflow from GitHub secrets/variables (never edited on the server, never in git).
 name: passvault
 
 services:

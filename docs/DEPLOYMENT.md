@@ -81,43 +81,40 @@ scp deploy/.env.production <user>@<server>:passvault/deploy/.env.production
 
 ---
 
-## 0b. Shared host with nginx + PostgreSQL (CI/CD)
+## 0b. Shared host with nginx + PostgreSQL (CI/CD only)
 
 Use this when the server already runs **nginx**, **PostgreSQL** and **Docker**
-for other applications (the production setup). PassVault then adds:
+for other applications (the production setup). **Nothing is configured on the
+server by hand:** every deploy applies the complete PassVault state from git and
+GitHub secrets/variables (`deploy/server/apply.sh`, shipped inside each release):
 
-| Piece | Where | Notes |
-|---|---|---|
-| API container `passvault-api` | `127.0.0.1:3100` (any free port, `PV_API_PORT`) | `deploy/server/compose.yaml`; read-only, no capabilities, logs rotated |
-| Database `passvault`, role `passvault` | existing PostgreSQL | reached from Docker networks via `host.docker.internal` (pg_hba: `172.16.0.0/12`) |
-| nginx site | `/etc/nginx/sites-available/passvault.conf` | TLS, security headers, static web app, `/api` → API |
-| TLS certificate `passvault` | `/etc/letsencrypt/live/passvault/` | certbot nginx plugin; renewed by `certbot.timer`, nginx reloaded |
-| Server secrets | `/opt/passvault/.env` (0600) | DB password, MFA key, peppers — generated on the server, never in Git or GitHub |
-| Releases | `/opt/passvault/releases/<commit>` | five newest kept; `web/current` and `current` symlinks |
+| Applied on every deploy | Source |
+|---|---|
+| `/opt/passvault/.env` (0600): database URL, MFA key, peppers, SMTP, URLs, CORS | GitHub secrets + variables (overwritten each deploy) |
+| PostgreSQL role (with the password from `DATABASE_URL`), database, `pg_hba` rule for Docker networks | `DATABASE_URL` (only when its host is `host.docker.internal`/localhost) |
+| TLS certificate `passvault` for the domain (renewed by `certbot.timer`) | `PV_PRODUCTION_URL` |
+| nginx site + security headers (`nginx -t` before reload; previous config restored on error) | `deploy/server/nginx.conf.template`, `nginx-headers.conf` |
+| API container on `127.0.0.1:PV_API_PORT`; pending Prisma migrations run at start | `deploy/server/compose.yaml`, image built in CI |
+| Web dashboard files | built in CI with `VITE_API_URL=PV_PRODUCTION_URL` |
 
-### One-time setup (as root on the server)
+A release that fails its health check is rolled back automatically to the
+previous one. Releases live in `/opt/passvault/releases/<commit>` (five kept).
 
-DNS: an A record for your domain must point to the server first.
+### One-time trust bootstrap (the only manual step, once per server)
 
-```bash
-scp -r deploy/server root@SERVER:/root/passvault-setup
-ssh root@SERVER 'cd /root/passvault-setup && PV_DOMAIN=vault.example.com PV_API_PORT=3100 bash setup.sh'
-```
-
-`setup.sh` is idempotent: it creates the directories and secrets, the database
-and role, the certificate and the nginx site (checked with `nginx -t` before
-reloading — other sites are not touched), and installs `/opt/passvault/bin/ci-deploy`.
-
-### CI deploy key (least privilege)
+The deploy key needs a fixed entry point on the server. Generate a key and
+install the entry point (`deploy/server/ci-entry.sh` → `/opt/passvault/bin/ci-deploy`):
 
 ```bash
 ssh-keygen -t ed25519 -N '' -C passvault-ci-deploy -f passvault-ci-deploy
-# on the server, append to /root/.ssh/authorized_keys:
-restrict,command="/opt/passvault/bin/ci-deploy" ssh-ed25519 AAAA… passvault-ci-deploy
+scp deploy/server/bootstrap.sh deploy/server/ci-entry.sh root@SERVER:/tmp/
+ssh root@SERVER "bash /tmp/bootstrap.sh '$(cat passvault-ci-deploy.pub)' && rm /tmp/bootstrap.sh /tmp/ci-entry.sh"
 ```
 
-That key can only run `ci-deploy` (`deploy <id>` with the release on stdin,
-`status`, `restart`, `rollback`) — no shell, no forwarding.
+The key is restricted (`restrict,command="/opt/passvault/bin/ci-deploy"`): it can
+only hand a release to the entry point (`deploy <id>`, `status`, `restart`,
+`rollback`) — no shell, no forwarding. The entry point only unpacks the release
+and runs that release's own `server/apply.sh`.
 
 ### GitHub configuration
 
@@ -125,20 +122,25 @@ Settings → Secrets and variables → Actions:
 
 | Kind | Name | Value |
 |---|---|---|
-| Variable | `PV_PRODUCTION_URL` | `https://vault.example.com` (used by deploy **and** the app/extension release builds) |
+| Variable | `PV_PRODUCTION_URL` | `https://vault.example.com` (also used by the app/extension release builds) |
 | Variable | `DEPLOY_HOST` | server IP or host name |
 | Variable | `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <DEPLOY_HOST>` output |
+| Variable (optional) | `PV_API_PORT` | loopback port for the API (default `3100`; must be free) |
 | Variable (optional) | `MAIL_FROM` | `PassVault <no-reply@vault.example.com>` |
-| Secret | `DEPLOY_SSH_KEY` | the private key above (`gh secret set DEPLOY_SSH_KEY < passvault-ci-deploy`, then delete the file) |
-| Secret | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` | your mail provider (port 587 + `SMTP_SECURE=false` for STARTTLS, or 465 + `true`) |
-| Secret (optional) | `DATABASE_URL` | `postgresql://USER:PASSWORD@HOST:5432/DB` — use another database/credentials than the ones `setup.sh` created. For PostgreSQL on the same host use `host.docker.internal` as HOST (and allow the user in `pg_hba.conf` from `172.16.0.0/12`). |
+| Variable (optional) | `PV_EXTRA_CORS_ORIGINS` | e.g. `chrome-extension://<id>` |
+| Secret | `DEPLOY_SSH_KEY` | the private key (`gh secret set DEPLOY_SSH_KEY < passvault-ci-deploy`, then delete the file) |
+| Secret | `DATABASE_URL` | `postgresql://passvault:PASSWORD@host.docker.internal:5432/passvault` (the host's PostgreSQL; role and database are created/updated to match) or any external PostgreSQL URL |
+| Secret | `MFA_ENCRYPTION_KEY`, `RECOVERY_CODE_PEPPER`, `PRELOGIN_SECRET` | `openssl rand -base64 32` each — **never change them once users exist** (MFA secrets and recovery codes depend on them) |
+| Secret | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` | your mail provider (587 + `false` for STARTTLS, or 465 + `true`) |
 
-`DATABASE_URL` and the SMTP secrets are written into `/opt/passvault/.env` on
-every deploy (only `DATABASE_URL`, `SMTP_*` and `MAIL_FROM` are accepted; empty
-or missing secrets keep the server's current value). Change a secret, then run
-**Actions → Deploy → Run workflow** to apply it. Every deploy runs pending
-Prisma migrations (`prisma migrate deploy`) against the configured database
-before the new version takes traffic.
+Generate the three keys without ever displaying them:
+
+```bash
+for k in MFA_ENCRYPTION_KEY RECOVERY_CODE_PEPPER PRELOGIN_SECRET; do openssl rand -base64 32 | gh secret set "$k" --repo OWNER/REPO; done
+```
+
+To change any setting (e.g. a new database password or SMTP account): update the
+secret/variable, then push to `main` or run **Actions → Deploy → Run workflow** on `main`.
 
 ### Releasing and deploying
 
@@ -154,33 +156,34 @@ Both workflows first run **Checks** (`checks.yml`: ESLint, typecheck, unit tests
 API end-to-end tests on PostgreSQL, builds, dependency audit, Go vet/gofmt/race
 tests, secrets scan). Nothing is deployed or released if any check fails.
 
-- **Deploy** (`deploy.yml`): builds the API image and the web app, ships them
-  over the restricted key, activates the release, rolls back automatically if
-  the health check fails, and smoke-tests the public URL.
+- **Deploy** (`deploy.yml`): builds the API image and the web app, sends them with
+  the configuration over the restricted key, applies everything (see above),
+  rolls back automatically if the health check fails, and smoke-tests the public URL.
 - **Release** (`release.yml`): builds the macOS app and the Chrome extension for
   `PV_PRODUCTION_URL` and publishes them with checksums and installation notes
   ([INSTALL.md](INSTALL.md)). An app is rebuilt only if its code changed since the
   previous release tag (`apps/desktop` + `native/desktop-helper` + `packages/` for
   the macOS app; `apps/browser-extension` + `packages/` for the extension);
   otherwise the release notes point to the previous release's download. The tag
-  must match the `package.json` version of each app that is rebuilt. Run Release
-  manually with *build_apps* to force both (e.g. after a dependency-only update).
+  must be on `main` and match the `package.json` version of each app that is
+  rebuilt. Run Release manually with *build_apps* to force both.
 
-Run **Deploy** manually (on `main`) to redeploy without new commits, e.g. after
-changing the SMTP or `DATABASE_URL` secrets. Releases must be tagged on a commit
-that is on `main`.
+### Operating (read-only)
 
-### Operating
+Use the Deploy workflow to change anything. For inspection:
 
 ```bash
-ssh root@SERVER 'SSH_ORIGINAL_COMMAND=status /opt/passvault/bin/ci-deploy'    # current release + container
-ssh root@SERVER 'SSH_ORIGINAL_COMMAND=rollback /opt/passvault/bin/ci-deploy'  # previous release
+ssh root@SERVER 'SSH_ORIGINAL_COMMAND=status /opt/passvault/bin/ci-deploy'
 ssh root@SERVER 'docker logs --tail 100 passvault-api-1'
 ssh root@SERVER 'tail -f /var/log/nginx/passvault.access.log'
 ```
 
-Backups: `pg_dump -Fc passvault` (as the postgres user) plus `/opt/passvault/.env`
-— without `.env` the MFA secrets in the database cannot be decrypted (see §12).
+`rollback` is also available through the entry point
+(`SSH_ORIGINAL_COMMAND=rollback`), e.g. if a bad release passed its health check.
+
+Backups: `pg_dump -Fc` of the database (see §12). Losing `MFA_ENCRYPTION_KEY`
+makes users' MFA secrets unreadable, so keep the GitHub secrets backed up in your
+password manager as well.
 
 ## 1. Architecture in production
 

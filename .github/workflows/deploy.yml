@@ -7,27 +7,34 @@ name: Deploy
 #   or: Actions → Deploy → Run workflow on main    # redeploy (e.g. after changing SMTP/DB secrets)
 # Only the main branch can deploy: other branches and tags never do.
 #
+# The server's whole PassVault state is applied from git + these settings on every
+# deploy (deploy/server/apply.sh): .env, database role/database, TLS certificate,
+# nginx site and the container. Nothing is configured on the server by hand
+# (except the one-time entry point for the deploy key: deploy/server/bootstrap.sh).
+#
 # Repository variables (Settings → Secrets and variables → Actions → Variables):
-#   PV_PRODUCTION_URL    https URL of the server, e.g. https://vault.example.com   [required]
-#   PV_WEB_URL           dashboard URL if different (defaults to PV_PRODUCTION_URL)
-#   DEPLOY_HOST          server address (IP or host name)                          [required]
-#   DEPLOY_USER          SSH user (default root)
-#   DEPLOY_KNOWN_HOSTS   output of `ssh-keyscan -t ed25519 <DEPLOY_HOST>`            [required]
-#   MAIL_FROM            sender, e.g. PassVault <no-reply@example.com> (optional)
+#   PV_PRODUCTION_URL      https URL of the server, e.g. https://vault.example.com      [required]
+#   PV_WEB_URL             dashboard URL if different (defaults to PV_PRODUCTION_URL)
+#   DEPLOY_HOST            server address (IP or host name)                             [required]
+#   DEPLOY_USER            SSH user (default root)
+#   DEPLOY_KNOWN_HOSTS     output of `ssh-keyscan -t ed25519 <DEPLOY_HOST>`               [required]
+#   PV_API_PORT            loopback port for the API container (default 3100)
+#   MAIL_FROM              sender, e.g. PassVault <no-reply@example.com>
+#   PV_EXTRA_CORS_ORIGINS  extra allowed origins, comma separated (e.g. chrome-extension://<id>)
+#   LOG_LEVEL              API log level (default info)
+#   ACME_EMAIL             Let's Encrypt account email (only needed on a host without a certbot account)
 #
 # Repository secrets (Settings → Secrets and variables → Actions → Secrets):
-#   DEPLOY_SSH_KEY       private key whose public half is in the server's authorized_keys as
-#                        restrict,command="/opt/passvault/bin/ci-deploy" …           [required]
-#   DATABASE_URL         optional: postgresql://USER:PASSWORD@HOST:5432/DB — overrides the database the
-#                        server was set up with (use host.docker.internal for the host's PostgreSQL)
-#   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD
-#                        mail provider
-# DATABASE_URL and SMTP_* are written into the server's /opt/passvault/.env on every deploy
-# (empty/missing secrets keep the server's current value). Pending Prisma migrations run on
-# every deploy (prisma migrate deploy) against that database.
+#   DEPLOY_SSH_KEY         key restricted to /opt/passvault/bin/ci-deploy on the server     [required]
+#   DATABASE_URL           postgresql://USER:PASSWORD@HOST:5432/DB                         [required]
+#                          HOST=host.docker.internal → the host's PostgreSQL; the role (with this
+#                          password), the database and the pg_hba rule are created/updated on deploy
+#   MFA_ENCRYPTION_KEY, RECOVERY_CODE_PEPPER, PRELOGIN_SECRET                              [required]
+#                          `openssl rand -base64 32` each. Never change them once users exist:
+#                          MFA secrets and recovery codes in the database depend on them.
+#   SMTP_HOST, SMTP_PORT [required], SMTP_SECURE, SMTP_USER, SMTP_PASSWORD   mail provider
 #
-# The MFA encryption key and peppers are generated on the server by
-# deploy/server/setup.sh and never pass through GitHub.
+# Pending Prisma migrations run on every deploy (prisma migrate deploy, at container start).
 
 on:
   push:
@@ -62,8 +69,16 @@ jobs:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
           HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+          HAS_DB: ${{ secrets.DATABASE_URL != '' }}
+          HAS_MFA: ${{ secrets.MFA_ENCRYPTION_KEY != '' }}
+          HAS_PEPPER: ${{ secrets.RECOVERY_CODE_PEPPER != '' }}
+          HAS_PRELOGIN: ${{ secrets.PRELOGIN_SECRET != '' }}
+          HAS_SMTP: ${{ secrets.SMTP_HOST != '' && secrets.SMTP_PORT != '' }}
         run: |
           fail=0
+          for s in HAS_DB:DATABASE_URL HAS_MFA:MFA_ENCRYPTION_KEY HAS_PEPPER:RECOVERY_CODE_PEPPER HAS_PRELOGIN:PRELOGIN_SECRET HAS_SMTP:SMTP_HOST/SMTP_PORT; do
+            v="${s%%:*}"; [ "${!v}" = "true" ] || { echo "::error::Add the repository secret ${s#*:}"; fail=1; }
+          done
           case "$PV_PRODUCTION_URL" in https://*) ;; *) echo "::error::Set the repository variable PV_PRODUCTION_URL (https://…)"; fail=1 ;; esac
           [ -n "$DEPLOY_HOST" ] || { echo "::error::Set the repository variable DEPLOY_HOST"; fail=1; }
           [ -n "$DEPLOY_KNOWN_HOSTS" ] || { echo "::error::Set the repository variable DEPLOY_KNOWN_HOSTS (ssh-keyscan output)"; fail=1; }
@@ -95,30 +110,37 @@ jobs:
           mkdir -p release
           docker save "passvault-api:$ID" | gzip > release/api-image.tar.gz
           cp -R apps/web/dist release/web
-          cp deploy/server/compose.yaml release/
+          mkdir -p release/server
+          cp deploy/server/apply.sh deploy/server/compose.yaml deploy/server/nginx.conf.template deploy/server/nginx-headers.conf release/server/
           ls -la release
 
-      - name: Settings from secrets (database, mail)
+      - name: Configuration and secrets for the server
         env:
+          PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+          PV_API_PORT: ${{ vars.PV_API_PORT || '3100' }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          PV_EXTRA_CORS_ORIGINS: ${{ vars.PV_EXTRA_CORS_ORIGINS }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          ACME_EMAIL: ${{ vars.ACME_EMAIL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MFA_ENCRYPTION_KEY: ${{ secrets.MFA_ENCRYPTION_KEY }}
+          RECOVERY_CODE_PEPPER: ${{ secrets.RECOVERY_CODE_PEPPER }}
+          PRELOGIN_SECRET: ${{ secrets.PRELOGIN_SECRET }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          MAIL_FROM: ${{ vars.MAIL_FROM }}
         run: |
           umask 077
+          PV_DOMAIN="$(node -p 'new URL(process.env.PV_PRODUCTION_URL).hostname')"
+          export PV_DOMAIN
           : > release/runtime.env
-          for k in DATABASE_URL SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD MAIL_FROM; do
+          for k in PV_DOMAIN PV_API_PORT MAIL_FROM PV_EXTRA_CORS_ORIGINS LOG_LEVEL ACME_EMAIL DATABASE_URL MFA_ENCRYPTION_KEY RECOVERY_CODE_PEPPER PRELOGIN_SECRET SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD; do
             v="${!k}"
-            if [ -n "$v" ]; then
-              case "$v" in *$'\n'*) echo "::error::$k must be a single line"; exit 1 ;; esac
-              printf '%s=%s\n' "$k" "$v" >> release/runtime.env
-              echo "$k: set"
-            else
-              echo "$k: not set (server keeps its current value)"
-            fi
+            case "$v" in *$'\n'*) echo "::error::$k must be a single line"; exit 1 ;; esac
+            printf '%s=%s\n' "$k" "$v" >> release/runtime.env
+            [ -n "$v" ] && echo "$k: set" || echo "$k: (empty)"
           done
 
       - name: Ship and activate
