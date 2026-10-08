@@ -85,6 +85,9 @@ export const requestSchema = z.discriminatedUnion('type', [
     })
     .strict(),
   z.object({ type: z.literal('clipboard.scheduleClear') }).strict(),
+  z.object({ type: z.literal('autosave.status') }).strict(),
+  z.object({ type: z.literal('autosave.set'), enabled: z.boolean() }).strict(),
+  z.object({ type: z.literal('autosave.clearNever') }).strict(),
 ]);
 
 export type Request = z.infer<typeof requestSchema>;
@@ -250,6 +253,16 @@ export interface ResponseMap {
   'item.updatePassword': { id: string };
   'generator.generate': GenerateResponse;
   'clipboard.scheduleClear': { scheduled: boolean; seconds: number };
+  'autosave.status': AutoSaveStatus;
+  'autosave.set': AutoSaveStatus;
+  'autosave.clearNever': AutoSaveStatus;
+}
+
+/** "Offer to save passwords" setting (requires the optional all-sites host permission). */
+export interface AutoSaveStatus {
+  enabled: boolean;
+  permission: boolean;
+  neverCount: number;
 }
 
 export type RequestOf<T extends RequestType> = Extract<Request, { type: T }>;

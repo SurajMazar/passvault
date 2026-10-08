@@ -79,6 +79,7 @@ to `chrome.scripting.executeScript({ func, args })`.
 | `offscreen` | An offscreen document (reason `CLIPBOARD`) clears the clipboard after the configured timeout. The service worker has no clipboard access, and the popup is usually closed by then. | none |
 | `clipboardWrite` | Lets the offscreen document write an empty string to the clipboard without a user gesture. | may show "Modify data you copy and paste" |
 | `host_permissions: [<API origin>/*]` | API calls from the service worker. | "Read and change your data on <api host>" |
+| `optional_host_permissions: [https://*/*, http://*/*]` | **Only if the user enables "Offer to save passwords"**: lets the opt-in content script notice login form submissions. Requested at runtime, removable at any time. | "Read and change all your data on all websites" (shown when enabling) |
 
 Deliberately **not** requested: `<all_urls>` or any other website host
 permission, `tabs`, `webRequest`, `cookies`, `nativeMessaging`, content
@@ -154,6 +155,8 @@ Sender checks (`src/background/sender.ts`), applied before anything else:
 | `autofill.capture {tabId}` | save-from-page | captured values + existing matching logins |
 | `item.saveLogin {confirmed: true, draft}` | save a new login | id |
 | `item.updatePassword {confirmed: true, id, password}` | update an existing login | id |
+| `autosave.status` / `autosave.set {enabled}` / `autosave.clearNever` | "Offer to save passwords" setting | `{enabled, permission, neverCount}` |
+| *content script →* `savePrompt.submitted {username, password}` / `savePrompt.pending` / `savePrompt.decide {decision}` | opt-in save prompt (top frame of a tab only; validated separately; never reaches popup-privileged handlers) | action/host/title only — never vault data |
 | `generator.generate {kind, options}` | password or passphrase (libsodium CSPRNG) | value + entropy |
 | `clipboard.scheduleClear` | arm the clipboard-clear alarm | scheduled seconds |
 
@@ -198,8 +201,49 @@ The injected function `pvFillCredentials`:
 4. If a login for this page with the same username already exists, the popup names the item. When the password differs, it offers **Update password**, which asks for confirmation and then calls `session.updateItem`; the old password stays in item history. **Save as new** is also available.
 5. Nothing is written until the user presses Save or Update. The protocol requires `confirmed: true`, and the background builds the item with `newItem('login', …)` and calls `session.saveItem`.
 
-There is no automatic "save this password?" prompt on form submit. See
-the known limitations.
+### Offer to save passwords (opt-in, automatic prompt)
+
+Enabled in the popup under **Settings → Offer to save passwords**. Turning it
+on calls `chrome.permissions.request` for the **optional** host permissions
+`https://*/*` and `http://*/*` (from the click, so Chrome shows its own
+permission dialog). Turning it off unregisters the script and gives the
+permission back; revoking the permission in `chrome://extensions` also stops it.
+
+1. While enabled, the background registers a content script
+   (`save-prompt.js`, ~5 KB, no imports) with
+   `chrome.scripting.registerContentScripts` — top frame only, `document_idle`.
+   Nothing is injected while the setting is off.
+2. The script listens for trusted (`event.isTrusted`) form submits, Enter in a
+   login field, and clicks on submit-like buttons. It reads the filled password
+   (the last filled one, for sign-up/change-password forms) and the username
+   next to it, and sends them **once** to the background.
+3. The background (`src/background/save-prompt.ts`) accepts these messages only
+   from this extension's content script in a tab's **top frame**; the page
+   origin comes from `sender.url`, never from the message; unknown fields are
+   rejected. It never prompts on PassVault's own dashboard/API origins or on
+   sites marked "Never". If the vault is unlocked and a matching login with the
+   same username exists, it suggests **Update** (or stays quiet if the
+   password is unchanged); otherwise **Save**.
+4. The captured password is kept in worker memory and `chrome.storage.session`
+   (memory-only, trusted contexts) for at most **3 minutes**, and is wiped when
+   the vault locks or the tab closes. Replies to the page contain only the
+   action, host and (for updates) the item title — never vault data.
+5. The prompt renders inside a **closed** shadow root (the page cannot read or
+   restyle it), page-derived text is set with `textContent` only, and clicks are
+   honoured only when trusted. After a post-login redirect it reappears on the
+   same registrable site (public-suffix aware, including private suffixes such
+   as `github.io`), never on another site.
+6. **Save** creates a login titled with the host, with the origin as its URL
+   and `host` matching; **Update** changes the password (old one stays in
+   history); **Never for this site** adds the site to a local list (Settings
+   shows a count and a Reset button). If the vault is locked, Save asks the
+   user to unlock from the toolbar icon and press Save again.
+
+Verified with unit tests (sender/origin validation, locked flow, update vs.
+save, redirect handling, never list, TTL and wipe-on-lock, no secrets in
+replies), jsdom tests (untrusted events ignored, closed shadow root, no HTML
+injection), and a real-Chromium check with trusted input
+(`pnpm --filter @passvault/e2e-video check:save-prompt`).
 
 ## Service-worker suspension and locking
 
@@ -266,7 +310,7 @@ The extension does not talk to the desktop app in this milestone, and the
 
 - **Cross-origin iframes are never filled or read.** Injection targets frame 0 only. Logins embedded in third-party iframes (some SSO widgets and payment pages) need copy and paste. Same-origin iframes are also skipped.
 - **Identifier-first (two-step) logins:** the fill function needs a visible password field. On a username-only step it returns `no_password_field` and touches nothing, so use *Copy username* there and fill on the password step.
-- **No automatic save prompt on form submit.** Detecting submits needs a persistent content script on every site, which means `<all_urls>` host permissions. That is deferred on purpose; saving is always initiated from the popup.
+- **Automatic save prompt is opt-in.** It needs all-sites access, so it is off by default and requested only when enabled. Logins inside cross-origin iframes are not captured, and very unusual JavaScript-only login flows may not be detected (use "Save login from this page").
 - **The page URL is visible only after the user opens the popup** (`activeTab`). Without that grant the popup shows "PassVault can only see the page you opened the popup on."
 - **Auto-lock granularity** is at least 30 s (`chrome.alarms`).
 - **Clipboard clearing** has the caveats listed in the Clipboard section.

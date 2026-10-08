@@ -59,3 +59,14 @@ describe('URL matching for autofill', () => {
     expect(r).toMatchObject({ matches: true, insecure: false });
   });
 });
+
+import { siteKey } from '../src/url-match';
+describe('siteKey', () => {
+  it('groups subdomains of a registrable domain but not across private suffixes', () => {
+    expect(siteKey('https://accounts.example.co.uk/login')).toBe('example.co.uk');
+    expect(siteKey('https://www.example.co.uk/')).toBe('example.co.uk');
+    expect(siteKey('https://alice.github.io/')).not.toBe(siteKey('https://mallory.github.io/'));
+    expect(siteKey('http://localhost:3000/')).toBe('localhost');
+    expect(siteKey('javascript:alert(1)')).toBeNull();
+  });
+});

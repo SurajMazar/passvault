@@ -6,7 +6,8 @@
   "description": "Records an end-to-end product walkthrough with Playwright and encodes it with ffmpeg.",
   "scripts": {
     "record": "tsx src/record.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:save-prompt": "tsx src/save-prompt-check.ts"
   },
   "dependencies": {
     "@passvault/vault-core": "workspace:*",

@@ -13,6 +13,7 @@ import { BackgroundController } from './controller';
 import { createLogger } from './log';
 import { createExtensionPlatform } from './platform';
 import { checkSender } from './sender';
+import { SavePromptManager } from './save-prompt';
 
 const c = chrome as unknown as ChromeLike;
 const platform = createExtensionPlatform(c, { apiBaseUrl: API_URL, webAppUrl: WEB_URL });
@@ -21,12 +22,20 @@ const session = new VaultSession(platform);
 // Diagnostics: fixed event names and codes only. Never message payloads.
 const log = createLogger();
 
-const controller = new BackgroundController({ chrome: c, session, webUrl: WEB_URL, log });
+const savePrompt = new SavePromptManager(c, session, [new URL(WEB_URL).origin, new URL(API_URL).origin]);
+const controller = new BackgroundController({ chrome: c, session, webUrl: WEB_URL, log, savePrompt });
+void savePrompt.syncRegistration().catch(() => log('autosave registration failed'));
 controller.ready.catch(() => log('startup failed'));
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   // Messages addressed to the offscreen document are not for us.
   if (message && typeof message === 'object' && (message as { target?: unknown }).target === OFFSCREEN_TARGET) return false;
+  // Messages from web-page tabs can only be the opt-in save-prompt content script;
+  // they are handled (and validated) separately and never reach privileged handlers.
+  if (sender.tab) {
+    void savePrompt.handle(message, sender).then(sendResponse, () => sendResponse(null));
+    return true;
+  }
   void controller.handleMessage(message, sender).then(sendResponse);
   return true; // async response
 });
@@ -52,6 +61,10 @@ chrome.runtime.onConnect.addListener((port) => {
   });
   void controller.ready.then(() => send(controller.popupState()));
 });
+
+chrome.tabs.onRemoved.addListener((tabId) => savePrompt.onTabRemoved(tabId));
+// If the user revokes the optional all-sites permission in chrome://extensions, stop prompting.
+chrome.permissions.onRemoved.addListener(() => void savePrompt.syncRegistration().catch(() => undefined));
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   void controller.onAlarm(alarm);

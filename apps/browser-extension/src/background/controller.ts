@@ -39,6 +39,7 @@ import type { ChromeLike, SenderLike } from './chrome-api';
 import { itemDetail, summarize } from './detail';
 import { TOKEN_KEY } from './platform';
 import { checkSender } from './sender';
+import type { SavePromptManager } from './save-prompt';
 
 export const RESUME_KEY = 'pv.resumeUserKey';
 export const CLIPBOARD_PENDING_KEY = 'pv.clipboardClearPending';
@@ -76,6 +77,8 @@ export interface ControllerDeps {
   chrome: ChromeLike;
   session: SessionLike;
   webUrl: string;
+  /** opt-in "offer to save passwords" feature (content-script side is in save-prompt.ts) */
+  savePrompt?: Pick<SavePromptManager, 'status' | 'setEnabled' | 'clearNeverList' | 'clearAll'>;
   /** Logger that receives only fixed strings and codes — never payloads. */
   log?: (event: string, detail?: string) => void;
 }
@@ -154,6 +157,8 @@ export class BackgroundController {
     this.session.onLock(() => {
       // Covers every lock path (alarm, popup, in-memory timer, revoked session).
       this.pendingAfterLock = this.afterLocked();
+      // Captured-but-unsaved passwords never outlive an unlocked session.
+      void this.deps.savePrompt?.clearAll();
     });
     this.ready = this.start();
   }
@@ -524,7 +529,18 @@ export class BackgroundController {
       }
       case 'clipboard.scheduleClear':
         return this.scheduleClipboardClear();
+      case 'autosave.status':
+        return this.autosave().status();
+      case 'autosave.set':
+        return this.autosave().setEnabled(req.enabled);
+      case 'autosave.clearNever':
+        return this.autosave().clearNeverList();
     }
+  }
+
+  private autosave() {
+    if (!this.deps.savePrompt) throw new ControllerError('bad_state', 'Offer-to-save is not available.');
+    return this.deps.savePrompt;
   }
 
   private async refreshToken() {

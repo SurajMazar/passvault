@@ -13,9 +13,9 @@ unit-tested where possible, but the real-world path could not be run here;
 | `packages/validation` | 7 / 7 |
 | `packages/env-parser` (6 000 random + 4 000 env-shaped + 1 000 UTF-16 round trips, 2 500 random edits) | 65 / 65 |
 | `packages/sync` (offline queue, idempotent replay, conflicts, tombstones, access loss, mid-run enqueue) | 9 / 9 |
-| `packages/vault-core` (offline unlock, lock wipes keys/plaintext, inactivity lock, URL matching incl. private suffixes, local search excludes secrets, insights) | 14 / 14 |
+| `packages/vault-core` (offline unlock, lock wipes keys/plaintext, inactivity lock, URL matching incl. private suffixes, site keys, local search excludes secrets, insights) | 15 / 15 |
 | `apps/api` e2e on real PostgreSQL (registration with code, MFA + replay, recovery codes, cross-user authz, roles, expiry, revision conflicts, idempotency, tombstones, sync paging, rotation, sessions, reauth, recovery, log redaction) | 35 / 35 |
-| `apps/browser-extension` (message/sender validation, origin matching, injected fill in jsdom, lock/resume, no secrets in logs, manifest permissions) | 36 / 36 |
+| `apps/browser-extension` (message/sender validation, origin matching, injected fill in jsdom, lock/resume, no secrets in logs, manifest permissions, opt-in save prompt: sender/origin checks, locked flow, update vs save, redirects, never list, TTL/wipe-on-lock, untrusted events ignored, closed shadow root) | 50 / 50 |
 | `apps/desktop` (IPC client, hop building, host-key trust, paste guard, link handler, lock hook, clipboard, storage keys, Keychain token, server selection & isolation) | 62 / 62 |
 | `native/desktop-helper` Go, `-race` (host-key accept/mismatch, jump hosts, password/key/keyboard-interactive auth, PTY resize, disconnect cleanup, agent lock/approval/forwarding, IPC validation, no secrets in logs/argv, 0600 exports) | all packages pass (52 tests) |
 | `tests/acceptance` — 12 multi-user/multi-device scenarios against the Podman stack **and** through the production TLS edge | 12 / 12 (both) |
@@ -31,7 +31,7 @@ unit-tested where possible, but the real-world path could not be run here;
 - Sharing of items and projects with fingerprint pinning, roles, resharing control, expiry, invitations, revocation with key rotation + re-encryption, rotation guidance.
 - Sync with offline queue, idempotent mutations, conflict detection and resolution UI, access-loss purge.
 - Web dashboard (light/dark, keyboard shortcuts, command palette, responsive), offline unlock from IndexedDB.
-- Browser extension (MV3): login/MFA/unlock, site matching, user-initiated top-frame fill with origin re-check, save/update from page, copy with clipboard clearing, generator, service-worker resume via `storage.session`, alarm-based lock. Verified in a real Chromium (headless) with an offline account.
+- Browser extension (MV3): login/MFA/unlock, site matching, user-initiated top-frame fill with origin re-check, save/update from page, **opt-in automatic "Save / Update password?" prompt after sign-in** (optional all-sites permission, closed shadow-root UI, trusted events only, 3-minute in-memory capture), copy with clipboard clearing, generator, service-worker resume via `storage.session`, alarm-based lock. Verified in a real Chromium (headless) with an offline account; the save prompt verified with trusted Playwright input.
 - Desktop app: Neutralino shell + Go helper; Keychain session storage; embedded SSH terminal with host-key trust/mismatch handling, keyboard-interactive prompts, resize, disconnect; SSH agent with per-use approval; lock on screen lock/sleep; server switch (production ↔ local) with per-server isolation; universal/arm64/x64 bundles launch and connect to the helper. Verified against a local test SSH server.
 - Production deployment stack (Podman + Caddy TLS + Postgres), pre-flight `deploy.sh`, encrypted `backup.sh`; rehearsed locally in `NODE_ENV=production` with a restore drill.
 - CI (`ci.yml`) and release pipeline (`release.yml`, actionlint-clean).
@@ -50,7 +50,7 @@ unit-tested where possible, but the real-world path could not be run here;
 
 ## Deferred (by design or scope)
 
-- Automatic "save this password?" prompt after form submission (needs broad host permissions); cross-origin iframe autofill.
+- Cross-origin iframe autofill/capture.
 - Desktop ↔ extension pairing over native messaging.
 - aPAKE (OPAQUE) login instead of the derived `authKey`.
 - Detection of server-side record rollback (signed revision chains).

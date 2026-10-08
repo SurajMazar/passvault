@@ -101,3 +101,21 @@ export function pageOrigin(pageUrl: string): string | null {
     return null;
   }
 }
+
+/**
+ * Registrable "site" of a page (e.g. accounts.example.co.uk → example.co.uk),
+ * honouring private suffixes such as github.io. Used to keep a pending save
+ * prompt on the same site across a post-login redirect. IPs and single-label
+ * hosts return the hostname itself. null for non-http(s) URLs.
+ */
+export function siteKey(pageUrl: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(pageUrl);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  if (isIpOrSingleLabel(u.hostname)) return u.hostname;
+  return getDomain(u.hostname, { allowPrivateDomains: true }) ?? u.hostname;
+}

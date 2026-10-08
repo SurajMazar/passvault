@@ -8,6 +8,8 @@ describe('generated manifest', () => {
     expect(m.background).toEqual({ service_worker: 'background.js', type: 'module' });
     expect([...m.permissions].sort()).toEqual(['activeTab', 'alarms', 'clipboardWrite', 'offscreen', 'scripting', 'storage']);
     expect(m.host_permissions).toEqual(['https://api.passvault.example:8443/*']);
+    // All-sites access is OPTIONAL: requested only when the user enables "Offer to save passwords".
+    expect(m.optional_host_permissions).toEqual(['https://*/*', 'http://*/*']);
     expect(m.content_security_policy.extension_pages).toBe("script-src 'self' 'wasm-unsafe-eval'; object-src 'self'");
     const json = JSON.stringify(m);
     for (const forbidden of ['<all_urls>', '"tabs"', 'webRequest', 'nativeMessaging', 'content_scripts', 'externally_connectable', 'web_accessible_resources']) {

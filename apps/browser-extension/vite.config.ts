@@ -27,6 +27,8 @@ export function buildManifest(apiUrl: string) {
     background: { service_worker: 'background.js', type: 'module' },
     permissions: ['storage', 'alarms', 'activeTab', 'scripting', 'offscreen', 'clipboardWrite'],
     host_permissions: [`${api.origin}/*`],
+    // Requested at runtime only when the user enables "Offer to save passwords".
+    optional_host_permissions: ['https://*/*', 'http://*/*'],
     content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
     commands: { _execute_action: { suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' } } },
   };
@@ -63,9 +65,10 @@ export default defineConfig(({ mode }) => {
           popup: resolve(root, 'popup.html'),
           offscreen: resolve(root, 'offscreen.html'),
           background: resolve(root, 'src/background/index.ts'),
+          'save-prompt': resolve(root, 'src/content/save-prompt.ts'),
         },
         output: {
-          entryFileNames: (chunk) => (chunk.name === 'background' ? 'background.js' : 'assets/[name]-[hash].js'),
+          entryFileNames: (chunk) => (chunk.name === 'background' ? 'background.js' : chunk.name === 'save-prompt' ? 'save-prompt.js' : 'assets/[name]-[hash].js'),
           chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash][extname]',
         },

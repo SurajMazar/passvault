@@ -523,6 +523,7 @@ time and is never hard-coded in the repository.
 | All item types | ✓ | view + copy, save/update logins | ✓ |
 | Local search, insights, generator | ✓ | search, generator | ✓ |
 | Autofill | — | user-initiated, top frame | — |
+| Save prompt after sign-in | — | opt-in ("Offer to save passwords") | — |
 | `.env` structured/raw editing, history, compare | ✓ | — | ✓ |
 | Projects, sharing, invitations, revocation + rotation | ✓ | — | ✓ |
 | Version history / conflict resolution | ✓ | via dashboard | ✓ |
@@ -552,7 +553,7 @@ time and is never hard-coded in the repository.
 
 ```mermaid
 flowchart TB
-  unit["Unit tests (vitest)<br/>crypto 21 · validation 7 · env-parser 65 (fuzzed round-trip)<br/>sync 9 · vault-core 14 · extension 36 · desktop 62"]
+  unit["Unit tests (vitest)<br/>crypto 21 · validation 7 · env-parser 65 (fuzzed round-trip)<br/>sync 9 · vault-core 15 · extension 50 · desktop 62"]
   go["Go tests (-race)<br/>pv-helper: in-process SSH servers,<br/>host keys, PTY, agent, IPC, logs"]
   e2e["API e2e (vitest + real PostgreSQL)<br/>35 tests: auth, MFA, authz, sync, sharing, rotation, recovery, log redaction"]
   acc["Acceptance (tests/acceptance)<br/>12 multi-user / multi-device scenarios<br/>against the real stack (incl. TLS edge)"]

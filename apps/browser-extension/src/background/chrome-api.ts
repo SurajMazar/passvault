@@ -48,12 +48,18 @@ export interface ChromeLike {
     create(props: { url: string }): Promise<unknown>;
   };
   scripting: {
+    registerContentScripts?(scripts: Array<{ id: string; matches: string[]; js: string[]; runAt?: 'document_idle' | 'document_end' | 'document_start'; allFrames?: boolean; persistAcrossSessions?: boolean }>): Promise<void>;
+    unregisterContentScripts?(filter: { ids: string[] }): Promise<void>;
+    getRegisteredContentScripts?(filter: { ids: string[] }): Promise<Array<{ id: string }>>;
     executeScript(injection: {
       target: { tabId: number; frameIds?: number[] };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       func: (...args: any[]) => unknown;
       args?: unknown[];
     }): Promise<InjectionResultLike[]>;
+  };
+  permissions?: {
+    contains(p: { origins?: string[]; permissions?: string[] }): Promise<boolean>;
   };
   offscreen?: {
     createDocument(params: { url: string; reasons: string[]; justification: string }): Promise<void>;

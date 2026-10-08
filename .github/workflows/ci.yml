@@ -73,5 +73,5 @@ jobs:
           fetch-depth: 0
       - name: Refuse committed env files and private keys
         run: |
-          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$'; then echo "Committed .env file"; exit 1; fi
+          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.example$'; then echo "Committed .env file"; exit 1; fi
           if git grep -nE 'BEGIN (OPENSSH|RSA|EC|DSA) PRIVATE KEY' -- ':!**/test/**' ':!**/*_test.go' ':!docs/**'; then echo "Private key committed"; exit 1; fi

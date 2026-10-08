@@ -32,6 +32,7 @@ import {
 } from '@passvault/ui';
 import type { ItemDetail, ItemSummary, LoginMatch, MatchesResponse, PopupState } from '../shared/protocol';
 import { openDashboard } from './AuthViews';
+import { AutoSaveSettings } from './AutoSaveSettings';
 import { Generator } from './Generator';
 import { activeTabId, call, copyToClipboard, errorText } from './rpc';
 import { SaveLogin } from './SaveLogin';
@@ -39,7 +40,7 @@ import { SaveLogin } from './SaveLogin';
 type Route = { view: 'list' } | { view: 'detail'; id: string } | { view: 'save' };
 
 export function VaultView({ state }: { state: PopupState }) {
-  const [tab, setTab] = useState<'vault' | 'generator'>('vault');
+  const [tab, setTab] = useState<'vault' | 'generator' | 'settings'>('vault');
   const [route, setRoute] = useState<Route>({ view: 'list' });
   const [tabId, setTabId] = useState<number | null>(null);
   useEffect(() => {
@@ -59,6 +60,7 @@ export function VaultView({ state }: { state: PopupState }) {
             tabs={[
               { id: 'vault', label: 'Vault' },
               { id: 'generator', label: 'Generator' },
+              { id: 'settings', label: 'Settings' },
             ]}
           />
         </div>
@@ -66,6 +68,8 @@ export function VaultView({ state }: { state: PopupState }) {
       <div className="flex-1 overflow-y-auto pv-scroll">
         {tab === 'generator' && route.view === 'list' ? (
           <Generator />
+        ) : tab === 'settings' && route.view === 'list' ? (
+          <AutoSaveSettings />
         ) : route.view === 'detail' ? (
           <Detail id={route.id} tabId={tabId} dataVersion={state.dataVersion} onBack={() => setRoute({ view: 'list' })} />
         ) : route.view === 'save' && tabId !== null ? (
