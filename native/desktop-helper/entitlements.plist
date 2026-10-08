@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements template for the signed pv-helper (hardened runtime is enabled
+  with `codesign -options runtime`; no hardened-runtime exceptions are needed:
+  no JIT, no unsigned executable memory, no DYLD variables, no library
+  validation exemption).
+
+  $(TEAM_ID) is substituted by `make sign TEAM_ID=...`.
+
+  keychain-access-groups (with the application identifier it is checked
+  against) is what allows the data-protection keychain, which biometric
+  (kSecAccessControlBiometryCurrentSet) items require. On macOS these are
+  restricted entitlements: they must be authorised by a provisioning profile,
+  so the helper has to ship inside a bundle that embeds one (see
+  docs/DESKTOP_HELPER.md, "Signing"). Without them SecItemAdd fails with
+  errSecMissingEntitlement (-34018) and the helper reports biometrics as
+  unavailable.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.application-identifier</key>
+	<string>$(TEAM_ID).io.passvault.desktop</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>$(TEAM_ID)</string>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(TEAM_ID).io.passvault.desktop</string>
+	</array>
+</dict>
+</plist>

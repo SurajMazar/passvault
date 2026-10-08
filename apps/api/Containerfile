@@ -1,0 +1,67 @@
+# PassVault API image. Build from the REPOSITORY ROOT (workspace packages are needed):
+#
+#   podman build -f apps/api/Containerfile -t localhost/passvault-api:dev .
+#
+# Works with podman/buildah (and Docker). Only explicit paths are copied, so
+# local .env files, node_modules and .dev/ never enter the image.
+
+ARG NODE_IMAGE=docker.io/library/node:22-alpine
+
+# ---------------------------------------------------------------- base
+FROM ${NODE_IMAGE} AS base
+RUN apk add --no-cache openssl \
+ && npm install -g pnpm@10.12.1 \
+ && npm cache clean --force
+ENV CI=true \
+    PNPM_HOME=/pnpm \
+    NEXT_TELEMETRY_DISABLED=1 \
+    CHECKPOINT_DISABLE=1 \
+    PRISMA_HIDE_UPDATE_MESSAGE=1
+WORKDIR /repo
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.base.json ./
+COPY packages/types/package.json packages/types/
+COPY packages/validation/package.json packages/validation/
+COPY packages/crypto/package.json packages/crypto/
+COPY apps/api/package.json apps/api/
+
+# ---------------------------------------------------------------- build
+FROM base AS build
+RUN pnpm install --frozen-lockfile --filter "@passvault/api..."
+COPY packages/types/tsconfig.json packages/types/tsconfig.cjs.json packages/types/
+COPY packages/types/src packages/types/src
+COPY packages/validation/tsconfig.json packages/validation/tsconfig.cjs.json packages/validation/
+COPY packages/validation/src packages/validation/src
+COPY apps/api/tsconfig.json apps/api/tsconfig.build.json apps/api/
+COPY apps/api/prisma apps/api/prisma
+COPY apps/api/src apps/api/src
+RUN pnpm --filter @passvault/types build \
+ && pnpm --filter @passvault/validation build \
+ && cd apps/api \
+ && pnpm exec prisma generate \
+ && pnpm exec tsc -p tsconfig.build.json
+
+# ---------------------------------------------------------------- production dependencies
+FROM base AS prod-deps
+RUN pnpm install --frozen-lockfile --prod --filter "@passvault/api..."
+COPY apps/api/prisma apps/api/prisma
+RUN cd apps/api && pnpm exec prisma generate
+
+# ---------------------------------------------------------------- runtime
+FROM ${NODE_IMAGE} AS runtime
+RUN apk add --no-cache openssl tini
+ENV NODE_ENV=production \
+    PORT=3000 \
+    CHECKPOINT_DISABLE=1 \
+    PRISMA_HIDE_UPDATE_MESSAGE=1
+WORKDIR /app
+COPY --from=prod-deps /repo /app
+COPY --from=build /repo/packages/types/dist /app/packages/types/dist
+COPY --from=build /repo/packages/validation/dist /app/packages/validation/dist
+COPY --from=build /repo/apps/api/dist /app/apps/api/dist
+COPY --chmod=0755 apps/api/container-entrypoint.sh /usr/local/bin/passvault-entrypoint
+WORKDIR /app/apps/api
+# unprivileged user from the node image (uid 1000); files stay root-owned/read-only
+USER node
+EXPOSE 3000
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/passvault-entrypoint"]
+CMD ["node", "dist/main.js"]

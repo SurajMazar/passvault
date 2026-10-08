@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PassVault.app (launcher + Neutralino shell). Hardened runtime with no
+  exceptions: no JIT / unsigned memory (WKWebView executes JavaScript in
+  WebKit's own XPC processes), no DYLD environment variables, library
+  validation stays on, no get-task-allow (debugger attachment is refused).
+  Not sandboxed: the helper must reach SSH servers, ~/Library/Application
+  Support/PassVault/agent and the Keychain.
+-->
+<plist version="1.0">
+<dict/>
+</plist>

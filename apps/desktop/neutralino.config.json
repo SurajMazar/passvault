@@ -1,0 +1,84 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/v6.10.0/schemas/neutralino.config.schema.json",
+  "applicationId": "io.passvault.desktop",
+  "version": "0.1.0",
+  "defaultMode": "window",
+  "port": 47391,
+  "documentRoot": "/resources/app/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "enableExtensions": true,
+  "tokenSecurity": "one-time",
+  "exportAuthInfo": false,
+  "singlePageServe": false,
+  "dataLocation": "system",
+  "storageLocation": "system",
+  "logging": {
+    "enabled": true,
+    "writeToLogFile": true
+  },
+  "serverHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store"
+  },
+  "nativeAllowList": [
+    "app.exit",
+    "app.broadcast",
+    "window.show",
+    "window.focus",
+    "window.hide",
+    "window.isVisible",
+    "window.unminimize",
+    "window.setMainMenu",
+    "os.showOpenDialog",
+    "os.showSaveDialog",
+    "os.showMessageBox",
+    "os.open",
+    "os.setTray",
+    "extensions.dispatch",
+    "extensions.getStats",
+    "storage.getData",
+    "storage.setData",
+    "storage.removeData",
+    "clipboard.readText",
+    "clipboard.writeText",
+    "computer.getOSInfo"
+  ],
+  "modes": {
+    "window": {
+      "title": "PassVault",
+      "width": 1240,
+      "height": 820,
+      "minWidth": 980,
+      "minHeight": 640,
+      "center": true,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "icon": "/resources/icons/appIcon.png",
+      "enableInspector": false,
+      "openInspectorOnStartup": false,
+      "borderless": false,
+      "maximize": false,
+      "hidden": false,
+      "resizable": true,
+      "exitProcessOnClose": false,
+      "useSavedState": true,
+      "newWindowPolicy": "custom"
+    }
+  },
+  "cli": {
+    "binaryName": "PassVault",
+    "resourcesPath": "/resources/",
+    "extensionsPath": "/extensions/",
+    "binaryVersion": "6.10.0",
+    "clientVersion": "6.10.0"
+  },
+  "extensions": [
+    {
+      "id": "io.passvault.helper",
+      "commandDarwin": "\"${NL_PATH}/../MacOS/pv-helper\""
+    }
+  ]
+}

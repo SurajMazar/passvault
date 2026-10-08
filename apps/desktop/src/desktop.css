@@ -1,0 +1,12 @@
+@import '@passvault/ui/styles.css';
+
+/* Scan the desktop sources for Tailwind classes too. */
+@source "./";
+
+.pv-xterm .xterm {
+  height: 100%;
+  padding: 2px 4px;
+}
+.pv-xterm .xterm-viewport {
+  background-color: #0c1117 !important;
+}

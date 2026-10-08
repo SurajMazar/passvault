@@ -1,0 +1,12 @@
+# Build-context filter for apps/api/Containerfile (context = repository root).
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+.dev
+.git
+apps/web
+apps/desktop
+apps/browser-extension
+native

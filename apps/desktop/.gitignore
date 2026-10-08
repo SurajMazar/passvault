@@ -1,0 +1,9 @@
+# Generated / downloaded (see scripts/)
+bin/
+dist/
+.build/
+.tmp/
+.storage/
+resources/app/
+neutralino.dev.config.json
+neutralinojs.log

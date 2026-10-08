@@ -1,0 +1,331 @@
+// PassVault data model. Vault contents are stored only as client-side
+// encrypted envelopes ("encrypted*" columns). See docs/DATA_MODEL.md for what
+// the server can observe.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionState {
+  pending_mfa
+  pending_enrollment
+  active
+}
+
+enum ClientType {
+  web
+  extension
+  desktop
+  cli
+}
+
+enum EmailTokenPurpose {
+  /// legacy (unused): email verification now happens before account creation (PendingRegistration)
+  verify_email
+  /// emailed recovery link token (step 1)
+  recovery
+  /// short-lived token issued after the recovery link + MFA were verified (step 2)
+  recovery_verified
+}
+
+enum MfaStatus {
+  pending
+  active
+}
+
+enum VaultType {
+  personal
+  shared
+}
+
+enum SharedVaultKind {
+  item
+  project
+}
+
+enum VaultRole {
+  owner
+  editor
+  viewer
+}
+
+enum MembershipStatus {
+  invited
+  accepted
+  declined
+  revoked
+  expired
+}
+
+enum RecordKind {
+  item
+  project
+}
+
+model User {
+  id                            String    @id @default(uuid()) @db.Uuid
+  email                         String    @unique
+  name                          String
+  emailVerifiedAt               DateTime?
+  /// libsodium crypto_pwhash_str (Argon2id) of the client-derived authKey
+  authKeyHash                   String
+  kdfAlgorithm                  String
+  kdfVersion                    Int
+  kdfOpsLimit                   Int
+  kdfMemLimitBytes              Int
+  kdfSalt                       String
+  encryptedUserKey              String
+  encryptedUserKeyByRecovery    String
+  /// crypto_pwhash_str of the recovery-derived proof key
+  recoveryAuthKeyHash           String
+  publicEncryptionKey           String
+  encryptedPrivateEncryptionKey String
+  publicSigningKey              String
+  encryptedPrivateSigningKey    String
+  publicKeySignature            String
+  encryptedSettings             String?
+  settingsRevision              Int       @default(0)
+  personalVaultId               String?   @db.Uuid
+  /// rotated on password/MFA changes; invalidates trusted-device tokens
+  securityStamp                 String
+  failedLoginCount              Int       @default(0)
+  lockedUntil                   DateTime?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  sessions      Session[]
+  devices       Device[]
+  mfa           MfaEnrollment[]
+  recoveryCodes RecoveryCode[]
+  emailTokens   EmailToken[]
+  memberships   VaultMember[]  @relation("member")
+  grantsMade    VaultMember[]  @relation("grantor")
+  ownedVaults   Vault[]
+}
+
+model EmailToken {
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String            @db.Uuid
+  purpose   EmailTokenPurpose
+  /// SHA-256 of the random token; the token itself only exists in the email
+  tokenHash String            @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  /// failed MFA / recovery-key proofs made with this token (invalidated after 5)
+  attempts  Int               @default(0)
+  createdAt DateTime          @default(now())
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+}
+
+/// Email verification BEFORE account creation (register/start -> register/verify -> register).
+model PendingRegistration {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// normalized (lower-case) email; one pending registration per address
+  email          String    @unique
+  /// HMAC-SHA256(server pepper, email + 6-digit code); the code only exists in the email
+  codeHash       String
+  attempts       Int       @default(0)
+  expiresAt      DateTime
+  verifiedAt     DateTime?
+  /// SHA-256 of the single-use registration token issued after the code was verified
+  tokenHash      String?   @unique
+  tokenExpiresAt DateTime?
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model MfaEnrollment {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  type            String    @default("totp")
+  status          MfaStatus
+  /// TOTP secret encrypted with the server MFA key (AES-256-GCM)
+  encryptedSecret String
+  /// last accepted TOTP time step, prevents code replay
+  lastUsedStep    BigInt?
+  createdAt       DateTime  @default(now())
+  activatedAt     DateTime?
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model RecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  /// HMAC-SHA256(server pepper, normalized code)
+  codeHash  String    @unique
+  batchId   String    @db.Uuid
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Device {
+  id               String     @id @default(uuid()) @db.Uuid
+  userId           String     @db.Uuid
+  /// client-generated installation id
+  clientDeviceId   String     @db.Uuid
+  name             String
+  clientType       ClientType
+  /// SHA-256 of the trusted-device token (skips MFA prompt until trustedUntil)
+  trustedTokenHash String?
+  trustedStamp     String?
+  trustedUntil     DateTime?
+  firstSeenAt      DateTime   @default(now())
+  lastSeenAt       DateTime   @default(now())
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions         Session[]
+
+  @@unique([userId, clientDeviceId])
+}
+
+model Session {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @db.Uuid
+  deviceId      String       @db.Uuid
+  /// SHA-256 of the bearer token
+  tokenHash     String       @unique
+  state         SessionState
+  createdAt     DateTime     @default(now())
+  lastSeenAt    DateTime     @default(now())
+  expiresAt     DateTime
+  idleExpiresAt DateTime
+  revokedAt     DateTime?
+  revokeReason  String?
+  reauthUntil   DateTime?
+  mfaAttempts   Int          @default(0)
+  ipPrefix      String?
+  userAgent     String?
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device        Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@index([deviceId])
+}
+
+model Vault {
+  id               String           @id @db.Uuid
+  type             VaultType
+  kind             SharedVaultKind?
+  ownerId          String           @db.Uuid
+  keyVersion       Int              @default(1)
+  allowResharing   Boolean          @default(false)
+  rotationRequired Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+  seq              BigInt           @default(dbgenerated("nextval('pv_change_seq')"))
+  owner            User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members          VaultMember[]
+  records          Record[]
+
+  @@index([ownerId])
+  @@index([seq])
+}
+
+model VaultMember {
+  vaultId           String           @db.Uuid
+  userId            String           @db.Uuid
+  role              VaultRole
+  status            MembershipStatus
+  keyVersion        Int
+  encryptedVaultKey String
+  keySignature      String?
+  grantedById       String?          @db.Uuid
+  expiresAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  seq               BigInt           @default(dbgenerated("nextval('pv_change_seq')"))
+  vault             Vault            @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+  user              User             @relation("member", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy         User?            @relation("grantor", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@id([vaultId, userId])
+  @@index([userId, status])
+  @@index([seq])
+}
+
+model Record {
+  id               String          @id @db.Uuid
+  vaultId          String          @db.Uuid
+  kind             RecordKind
+  revision         Int             @default(1)
+  formatVersion    Int
+  encryptedKey     String?
+  encryptedPayload String?
+  size             Int
+  createdById      String          @db.Uuid
+  updatedById      String          @db.Uuid
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  /// tombstone: permanent deletion keeps the row (without ciphertext) so deletions propagate
+  deletedAt        DateTime?
+  seq              BigInt          @default(dbgenerated("nextval('pv_change_seq')"))
+  vault            Vault           @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+  versions         RecordVersion[]
+
+  @@index([vaultId, seq])
+  @@index([seq])
+}
+
+model RecordVersion {
+  id               String   @id @default(uuid()) @db.Uuid
+  recordId         String   @db.Uuid
+  revision         Int
+  vaultId          String   @db.Uuid
+  formatVersion    Int
+  encryptedKey     String
+  encryptedPayload String
+  createdAt        DateTime @default(now())
+  createdById      String   @db.Uuid
+  record           Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@unique([recordId, revision])
+}
+
+/// Idempotency log for client mutations (retries return the original response)
+model Mutation {
+  userId     String   @db.Uuid
+  mutationId String   @db.Uuid
+  statusCode Int
+  response   Json
+  createdAt  DateTime @default(now())
+
+  @@id([userId, mutationId])
+  @@index([createdAt])
+}
+
+model AuditEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  /// monotonic numeric id used as the pagination cursor
+  seq           BigInt   @unique @default(autoincrement())
+  type          String
+  actorUserId   String?  @db.Uuid
+  subjectUserId String?  @db.Uuid
+  vaultId       String?  @db.Uuid
+  recordId      String?  @db.Uuid
+  deviceId      String?  @db.Uuid
+  ipPrefix      String?
+  /// never contains secrets or ciphertext; redacted structured fields only
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([subjectUserId, createdAt])
+  @@index([vaultId, createdAt])
+}

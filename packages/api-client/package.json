@@ -1,0 +1,11 @@
+{
+  "name": "@passvault/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "@passvault/types": "workspace:*", "@passvault/validation": "workspace:*" }
+}

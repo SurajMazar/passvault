@@ -1,0 +1,34 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.DS_Store
+.vite/
+# Real secrets — never commit
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env.production.example
+*.pem
+*.key
+*.p12
+# Local dev state
+.dev/
+apps/desktop/bin/
+apps/desktop/dist/
+apps/desktop/.storage/
+apps/desktop/.tmp/
+apps/desktop/neutralinojs.log
+apps/desktop/resources/app/
+native/desktop-helper/bin/
+apps/browser-extension/dist/
+playwright-report/
+test-results/
+
+# deployment secrets
+deploy/.env.production
+deploy/.env.rehearsal
+apps/browser-extension/*.zip
+tests/e2e-video/.raw/

@@ -1,0 +1,96 @@
+# PassVault local stack for Podman (works with `podman compose` and `podman-compose`;
+# Docker Compose also works, but Docker is not required).
+#
+#   cp .env.example .env        # then fill in the secrets (see comments there)
+#   podman compose up -d --build
+#   curl http://127.0.0.1:3000/api/v1/health
+#   open http://127.0.0.1:8025  # Mailpit: verification / recovery emails
+#   podman compose down         # add -v to also delete the database volume
+#
+# See docs/OPERATIONS.md for configuration, backups and production notes.
+name: passvault
+
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: passvault
+      POSTGRES_USER: passvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (openssl rand -hex 24)}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U passvault -d passvault"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    # Not published to the host. For psql/pg_dump use:
+    #   podman compose exec postgres psql -U passvault passvault
+
+  mailpit:
+    image: docker.io/axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: localhost/passvault-api:dev
+    build:
+      context: .
+      dockerfile: apps/api/Containerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      NODE_ENV: ${API_NODE_ENV:-development}
+      PORT: "3000"
+      MIGRATE_ON_START: "true"
+      DATABASE_URL: postgresql://passvault:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/passvault
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?set MFA_ENCRYPTION_KEY (openssl rand -base64 32)}
+      RECOVERY_CODE_PEPPER: ${RECOVERY_CODE_PEPPER:?set RECOVERY_CODE_PEPPER (openssl rand -base64 32)}
+      PRELOGIN_SECRET: ${PRELOGIN_SECRET:?set PRELOGIN_SECRET (openssl rand -base64 32)}
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:5173}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:47391}
+      MAIL_TRANSPORT: smtp
+      MAIL_FROM: ${MAIL_FROM:-PassVault <no-reply@passvault.localhost>}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  pgdata:

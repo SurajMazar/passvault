@@ -1,0 +1,18 @@
+{
+  "name": "@passvault/e2e-video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Records an end-to-end product walkthrough with Playwright and encodes it with ffmpeg.",
+  "scripts": {
+    "record": "tsx src/record.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@passvault/vault-core": "workspace:*",
+    "@passvault/sync": "workspace:*",
+    "@passvault/types": "workspace:*",
+    "otpauth": "9.5.2",
+    "playwright": "1.64.0"
+  }
+}

@@ -1,0 +1,11 @@
+@import '@passvault/ui/styles.css';
+/* Tailwind v4 skips node_modules; scan the extension's own sources explicitly. */
+@source "../";
+
+html,
+body {
+  width: 380px;
+  height: 600px;
+  margin: 0;
+  overflow: hidden;
+}

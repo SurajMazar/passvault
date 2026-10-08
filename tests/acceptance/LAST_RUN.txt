@@ -1,0 +1,16 @@
+PassVault acceptance run muz79bqt against http://localhost:3100
+
+  ✓ 1. Register (email verified first), mandatory MFA enrollment, unlock (2174 ms)
+  ✓ 2. Save a website login with notes, tags, and category (38 ms)
+  ✓ 4. Save SSH, database, and API credentials without website URLs (71 ms)
+  ✓ 5. Project with Development and Production .env files (58 ms)
+  ✓ 6. Edit a variable, compare environments, restore a version, export intentionally (83 ms)
+  ✓ 7. Second device signs in (MFA) and syncs the same encrypted items (19399 ms)
+  ✓ 11. Share a project with another user and enforce editing permissions (303 ms)
+  ✓ 12. Revoke future access: key rotation and re-encryption (108 ms)
+  ✓ 13. Lock the vault: decrypted state cleared and new key use refused (163 ms)
+  ✓ 14. Offline edit, concurrent change, conflict resolution (155 ms)
+  ✓ Deletion tombstones prevent resurrection (76 ms)
+  ✓ Server stores no plaintext for item fields (11 ms)
+
+12/12 scenarios passed

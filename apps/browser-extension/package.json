@@ -1,0 +1,38 @@
+{
+  "name": "@passvault/browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PassVault browser extension (Chrome Manifest V3).",
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "dev": "vite build --watch --mode development",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "icons": "node scripts/gen-icons.mjs",
+    "zip": "node scripts/zip.mjs"
+  },
+  "dependencies": {
+    "@passvault/crypto": "workspace:*",
+    "@passvault/sync": "workspace:*",
+    "@passvault/types": "workspace:*",
+    "@passvault/ui": "workspace:*",
+    "@passvault/vault-core": "workspace:*",
+    "lucide-react": "1.52.0",
+    "qrcode": "1.5.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/chrome": "0.3.0",
+    "@types/qrcode": "1.5.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "jsdom": "26.1.0",
+    "tailwindcss": "4.3.3",
+    "vite": "7.3.7"
+  }
+}

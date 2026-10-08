@@ -1,0 +1,111 @@
+# Production-style single-host deployment (Podman or Docker Compose).
+#
+#   cp deploy/.env.production.example deploy/.env.production   # fill in every value
+#   podman compose -f deploy/compose.prod.yaml --env-file deploy/.env.production up -d --build
+#
+# Topology: Internet → caddy (443, TLS, headers, static web) → api (internal) → postgres (internal).
+# See docs/DEPLOYMENT.md.
+name: passvault-prod
+
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: passvault
+      POSTGRES_USER: passvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U passvault -d passvault"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    image: ${PV_API_IMAGE:-localhost/passvault-api:prod}
+    build:
+      context: ..
+      dockerfile: apps/api/Containerfile
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      MIGRATE_ON_START: ${MIGRATE_ON_START:-true}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://passvault:${POSTGRES_PASSWORD}@postgres:5432/passvault}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?set MFA_ENCRYPTION_KEY}
+      RECOVERY_CODE_PEPPER: ${RECOVERY_CODE_PEPPER:?set RECOVERY_CODE_PEPPER}
+      PRELOGIN_SECRET: ${PRELOGIN_SECRET:?set PRELOGIN_SECRET}
+      WEB_APP_URL: https://${PV_DOMAIN:?set PV_DOMAIN}${PV_PUBLIC_PORT_SUFFIX:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS}
+      MAIL_TRANSPORT: smtp
+      MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM}
+      SMTP_HOST: ${SMTP_HOST:?set SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      TRUST_PROXY: "1"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      JOBS_ENABLED: "true"
+    networks: [backend, edge]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  caddy:
+    image: ${PV_WEB_IMAGE:-localhost/passvault-web:prod}
+    build:
+      context: ..
+      dockerfile: deploy/web.Containerfile
+      args:
+        VITE_API_URL: https://${PV_DOMAIN}${PV_PUBLIC_PORT_SUFFIX:-}
+    restart: always
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PV_DOMAIN: ${PV_DOMAIN}
+      PV_ACME_EMAIL: ${PV_ACME_EMAIL:?set PV_ACME_EMAIL (ACME account contact)}
+    ports:
+      - "${PV_HTTP_PORT:-80}:80"
+      - "${PV_HTTPS_PORT:-443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+
+  # Only for a local rehearsal (`--profile rehearsal`): an SMTP sink instead of a real mail provider.
+  mailpit:
+    image: docker.io/axllent/mailpit:latest
+    profiles: [rehearsal]
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${PV_MAILPIT_PORT:-8026}:8025"
+    networks: [backend, edge]
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

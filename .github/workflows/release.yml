@@ -1,0 +1,277 @@
+name: Release
+
+# Builds and publishes the macOS desktop app and the Chrome extension.
+#
+#   git tag v0.1.0 && git push origin v0.1.0      # or run manually (workflow_dispatch)
+#
+# Repository VARIABLES (Settings → Secrets and variables → Actions → Variables):
+#   PV_PRODUCTION_URL    https URL of your PassVault server (baked into both clients)   [required]
+#   PV_WEB_URL           web dashboard URL (defaults to PV_PRODUCTION_URL)
+#
+# Optional SECRETS for a signed + notarized desktop app (otherwise an UNSIGNED, ad-hoc
+# signed DMG is published and clearly labelled):
+#   MACOS_CERT_P12_BASE64   base64 of the "Developer ID Application" certificate + key (.p12)
+#   MACOS_CERT_PASSWORD     password of that .p12
+#   APPLE_TEAM_ID           10-character Team ID
+#   APPLE_ID                Apple ID e-mail used for notarization
+#   APPLE_APP_PASSWORD      app-specific password for that Apple ID
+#   MACOS_PROVISIONING_PROFILE_BASE64  (optional) Developer ID provisioning profile enabling
+#                                       the keychain-access group for Touch ID unlock
+#
+# Optional SECRETS to publish the extension to the Chrome Web Store (otherwise the zip is
+# attached to the GitHub release for manual upload):
+#   CWS_EXTENSION_ID, CWS_CLIENT_ID, CWS_CLIENT_SECRET, CWS_REFRESH_TOKEN
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v0.1.0). Must match the app versions.'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  verify:
+    name: Verify versions and run tests
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Tag must match package versions
+        run: |
+          version="${TAG#v}"
+          for p in apps/desktop/package.json apps/browser-extension/package.json; do
+            pv=$(node -p "require('./$p').version")
+            [ "$pv" = "$version" ] || { echo "::error::$p is $pv but the tag is $TAG"; exit 1; }
+          done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;; *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;; esac
+      - name: Production URL is configured
+        env:
+          PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+        run: |
+          case "$PV_PRODUCTION_URL" in https://*) ;; *) echo "::error::Set the repository variable PV_PRODUCTION_URL to your https server URL"; exit 1 ;; esac
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build
+      - name: Typecheck
+        run: pnpm -r --filter '!@passvault/api' run typecheck
+      - name: Client unit tests
+        run: pnpm -r --workspace-concurrency=1 --filter './packages/*' --filter @passvault/browser-extension --filter @passvault/desktop run test
+
+  extension:
+    name: Chrome extension
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build (production URLs from repository variables)
+        env:
+          VITE_API_URL: ${{ vars.PV_PRODUCTION_URL }}
+          VITE_WEB_URL: ${{ vars.PV_WEB_URL || vars.PV_PRODUCTION_URL }}
+        run: pnpm --filter @passvault/browser-extension build
+      - name: Check manifest (MV3, minimal permissions, server host permission)
+        env:
+          PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+        run: |
+          node -e '
+            const m = require("./apps/browser-extension/dist/manifest.json");
+            const origin = new URL(process.env.PV_PRODUCTION_URL).origin + "/*";
+            if (m.manifest_version !== 3) throw new Error("not MV3");
+            if (JSON.stringify(m.host_permissions) !== JSON.stringify([origin])) throw new Error("unexpected host_permissions " + JSON.stringify(m.host_permissions));
+            for (const p of ["<all_urls>", "tabs", "webRequest", "nativeMessaging"]) if ((m.permissions || []).includes(p)) throw new Error("forbidden permission " + p);
+            console.log("manifest ok:", m.version, m.host_permissions);
+          '
+      - name: Package
+        run: |
+          pnpm --filter @passvault/browser-extension zip
+          mkdir -p out
+          cp apps/browser-extension/passvault-extension-*.zip out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: out/*.zip
+          if-no-files-found: error
+      - name: Publish to the Chrome Web Store (when credentials are configured)
+        env:
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$CWS_EXTENSION_ID" ] || [ -z "$CWS_REFRESH_TOKEN" ]; then
+            echo "Chrome Web Store credentials not configured — the zip is attached to the GitHub release for manual upload."
+            exit 0
+          fi
+          token=$(curl -fsS https://oauth2.googleapis.com/token \
+            -d client_id="$CWS_CLIENT_ID" -d client_secret="$CWS_CLIENT_SECRET" \
+            -d refresh_token="$CWS_REFRESH_TOKEN" -d grant_type=refresh_token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
+          echo "::add-mask::$token"
+          curl -fsS -X PUT -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" \
+            -T out/passvault-extension-*.zip \
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$CWS_EXTENSION_ID" | tee upload.json
+          node -e 'const r=require("./upload.json"); if (r.uploadState !== "SUCCESS") { console.error(r); process.exit(1) }'
+          curl -fsS -X POST -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" -H "Content-Length: 0" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$CWS_EXTENSION_ID/publish"
+
+  desktop:
+    name: macOS desktop app
+    needs: verify
+    runs-on: macos-14
+    env:
+      SIGNING: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.APPLE_TEAM_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: native/desktop-helper/go.sum
+      - run: pnpm install --frozen-lockfile
+      - name: Helper tests
+        working-directory: native/desktop-helper
+        env:
+          PV_SKIP_KEYCHAIN_TESTS: '1'
+        run: go test ./...
+      - name: Build PassVault.app (universal)
+        env:
+          VITE_API_URL: ${{ vars.PV_PRODUCTION_URL }}
+          VITE_WEB_URL: ${{ vars.PV_WEB_URL || vars.PV_PRODUCTION_URL }}
+          VITE_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+          ARCHS: universal
+          HELPER_LAYOUT: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 != '' && 'bundle' || 'flat' }}
+        run: |
+          bash apps/desktop/scripts/build.sh
+          lipo -info apps/desktop/dist/PassVault.app/Contents/MacOS/PassVault
+
+      - name: Import signing certificate and notarization credentials
+        if: env.SIGNING == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          PROFILE_B64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KC_PASS="$(openssl rand -hex 24)"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KC_PASS" "$KEYCHAIN" >/dev/null
+          existing=()
+          while IFS= read -r k; do existing+=("$(echo "$k" | tr -d '" ')"); done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$KEYCHAIN" "${existing[@]}"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+          [ -n "$IDENTITY" ] || { echo "::error::No Developer ID Application identity in the certificate"; exit 1; }
+          echo "IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          xcrun notarytool store-credentials passvault-notary --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --keychain "$KEYCHAIN"
+          if [ -n "$PROFILE_B64" ]; then
+            echo "$PROFILE_B64" | base64 --decode > "$RUNNER_TEMP/passvault.provisionprofile"
+            echo "PROVISIONING_PROFILE=$RUNNER_TEMP/passvault.provisionprofile" >> "$GITHUB_ENV"
+          fi
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      - name: Sign, notarize, staple, DMG
+        if: env.SIGNING == 'true'
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_PROFILE: passvault-notary
+        run: |
+          bash apps/desktop/scripts/sign-and-notarize.sh apps/desktop/dist/PassVault.app
+          mkdir -p out
+          cp apps/desktop/dist/PassVault-*.dmg "out/PassVault-${TAG#v}-macos-universal.dmg"
+          spctl --assess --type open --context context:primary-signature -v "out/PassVault-${TAG#v}-macos-universal.dmg"
+
+      - name: Unsigned DMG (no Apple credentials configured)
+        if: env.SIGNING != 'true'
+        run: |
+          echo "::warning::Apple signing secrets are not configured — publishing an UNSIGNED (ad-hoc signed) build. macOS Gatekeeper will block it until the user explicitly allows it."
+          mkdir -p out dmg
+          cp -R apps/desktop/dist/PassVault.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "PassVault" -srcfolder dmg -ov -format UDZO "out/PassVault-${TAG#v}-macos-universal-UNSIGNED.dmg"
+
+      - name: Clean up keychain
+        if: always() && env.KEYCHAIN != ''
+        run: security delete-keychain "$KEYCHAIN" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop
+          path: out/*.dmg
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    needs: [verify, extension, desktop]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          cat > notes.md <<EOF
+          ## PassVault ${TAG}
+
+          | Artifact | |
+          |---|---|
+          | \`PassVault-*-macos-universal*.dmg\` | macOS 14+ (Apple silicon and Intel). Files marked **UNSIGNED** are not notarized: verify the SHA-256 below before opening, then allow it in System Settings → Privacy & Security. |
+          | \`passvault-extension-*.zip\` | Chrome/Chromium MV3 extension (load unpacked, or the Chrome Web Store listing if published). |
+          | \`SHA256SUMS.txt\` | Checksums of every artifact. |
+
+          PassVault has not yet been independently audited — see docs/SECURITY_REVIEW.md.
+          EOF
+          flags=""
+          [ "$PRERELEASE" = "true" ] && flags="--prerelease"
+          gh release create "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --title "PassVault $TAG" --notes-file notes.md --target "$GITHUB_SHA" $flags

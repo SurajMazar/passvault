@@ -1,0 +1,28 @@
+{
+  "name": "passvault",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PassVault — end-to-end encrypted password and developer-secrets manager (web, browser extension, macOS desktop).",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.12.1",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "build:packages": "pnpm -r --filter './packages/*' run build",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 run test",
+    "lint": "pnpm -r run lint",
+    "dev:db": "bash scripts/dev-postgres.sh start",
+    "dev:api": "pnpm --filter @passvault/api dev",
+    "dev:web": "pnpm --filter @passvault/web dev"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "3.2.7",
+    "@types/node": "22.20.5",
+    "tsx": "4.20.6"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "esbuild", "@nestjs/core"]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@passvault/vault-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run" },
+  "dependencies": {
+    "@passvault/crypto": "workspace:*",
+    "@passvault/types": "workspace:*",
+    "@passvault/validation": "workspace:*",
+    "@passvault/env-parser": "workspace:*",
+    "@passvault/api-client": "workspace:*",
+    "@passvault/sync": "workspace:*",
+    "@zxcvbn-ts/core": "4.2.0",
+    "@zxcvbn-ts/language-common": "4.1.3",
+    "@zxcvbn-ts/language-en": "4.1.1",
+    "tldts": "7.4.18"
+  },
+  "devDependencies": { "fake-indexeddb": "6.2.5" }
+}

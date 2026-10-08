@@ -1,0 +1,25 @@
+{
+  "name": "@passvault/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run --passWithNoTests" },
+  "dependencies": {
+    "@passvault/ui": "workspace:*",
+    "@passvault/vault-core": "workspace:*",
+    "@passvault/crypto": "workspace:*",
+    "@passvault/types": "workspace:*",
+    "@passvault/validation": "workspace:*",
+    "@passvault/env-parser": "workspace:*",
+    "@passvault/api-client": "workspace:*",
+    "@passvault/sync": "workspace:*",
+    "lucide-react": "1.52.0",
+    "qrcode": "1.5.4",
+    "zustand": "5.0.15"
+  },
+  "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" },
+  "devDependencies": { "react": "19.3.0", "react-dom": "19.3.0", "@types/react": "19.3.0", "@types/react-dom": "19.3.0", "@types/qrcode": "1.5.6" }
+}

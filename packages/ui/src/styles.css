@@ -1,0 +1,187 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+
+/* Tailwind v4 skips node_modules; scan the shared packages explicitly. */
+@source "./";
+@source "../../app/src";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * PassVault visual identity — "Verdigris".
+ * Cool ink neutrals, an oxidised-copper teal accent, and an ember signal
+ * reserved for Production. Fonts are bundled (no remote loading) so the
+ * same CSP works in the web app, extension and desktop webview.
+ */
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-bg: var(--pv-bg);
+  --color-bg-subtle: var(--pv-bg-subtle);
+  --color-surface: var(--pv-surface);
+  --color-surface-2: var(--pv-surface-2);
+  --color-surface-3: var(--pv-surface-3);
+  --color-border: var(--pv-border);
+  --color-border-strong: var(--pv-border-strong);
+  --color-fg: var(--pv-fg);
+  --color-fg-muted: var(--pv-fg-muted);
+  --color-fg-subtle: var(--pv-fg-subtle);
+  --color-accent: var(--pv-accent);
+  --color-accent-hover: var(--pv-accent-hover);
+  --color-accent-fg: var(--pv-accent-fg);
+  --color-accent-soft: var(--pv-accent-soft);
+  --color-accent-line: var(--pv-accent-line);
+  --color-danger: var(--pv-danger);
+  --color-danger-soft: var(--pv-danger-soft);
+  --color-warn: var(--pv-warn);
+  --color-warn-soft: var(--pv-warn-soft);
+  --color-ok: var(--pv-ok);
+  --color-ok-soft: var(--pv-ok-soft);
+  --color-prod: var(--pv-prod);
+  --color-prod-soft: var(--pv-prod-soft);
+  --color-focus: var(--pv-focus);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  --shadow-card: var(--pv-shadow-card);
+  --shadow-pop: var(--pv-shadow-pop);
+}
+
+:root {
+  --pv-bg: #f4f6f8;
+  --pv-bg-subtle: #eef1f4;
+  --pv-surface: #ffffff;
+  --pv-surface-2: #f9fafb;
+  --pv-surface-3: #f2f4f7;
+  --pv-border: #e4e7ec;
+  --pv-border-strong: #d0d5dd;
+  --pv-fg: #101828;
+  --pv-fg-muted: #475467;
+  --pv-fg-subtle: #667085;
+  --pv-accent: #0b7f72;
+  --pv-accent-hover: #096b60;
+  --pv-accent-fg: #ffffff;
+  --pv-accent-soft: #e3f4f1;
+  --pv-accent-line: #9ad7cd;
+  --pv-danger: #c4320a;
+  --pv-danger-soft: #fef0eb;
+  --pv-warn: #a15c07;
+  --pv-warn-soft: #fef6e7;
+  --pv-ok: #067647;
+  --pv-ok-soft: #e7f6ee;
+  --pv-prod: #c2410c;
+  --pv-prod-soft: #fff1e6;
+  --pv-focus: #0b7f72;
+  --pv-shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+  --pv-shadow-pop: 0 12px 32px -8px rgb(16 24 40 / 0.18), 0 4px 8px -4px rgb(16 24 40 / 0.08);
+  color-scheme: light;
+}
+
+.dark {
+  --pv-bg: #0a0e13;
+  --pv-bg-subtle: #0e131a;
+  --pv-surface: #11171f;
+  --pv-surface-2: #151c25;
+  --pv-surface-3: #1a222d;
+  --pv-border: #212a35;
+  --pv-border-strong: #2e3945;
+  --pv-fg: #e8edf3;
+  --pv-fg-muted: #a6b0bd;
+  --pv-fg-subtle: #7d8896;
+  --pv-accent: #2bc3ae;
+  --pv-accent-hover: #4fd3c0;
+  --pv-accent-fg: #03201b;
+  --pv-accent-soft: rgb(43 195 174 / 0.12);
+  --pv-accent-line: rgb(43 195 174 / 0.4);
+  --pv-danger: #ff8266;
+  --pv-danger-soft: rgb(255 130 102 / 0.12);
+  --pv-warn: #f5b950;
+  --pv-warn-soft: rgb(245 185 80 / 0.12);
+  --pv-ok: #4ad295;
+  --pv-ok-soft: rgb(74 210 149 / 0.12);
+  --pv-prod: #ff9a52;
+  --pv-prod-soft: rgb(255 154 82 / 0.13);
+  --pv-focus: #4fd3c0;
+  --pv-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --pv-shadow-pop: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.04);
+  color-scheme: dark;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--pv-bg);
+    color: var(--pv-fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--pv-accent-soft);
+  }
+
+  /* Visible, consistent keyboard focus everywhere. */
+  :focus-visible {
+    outline: 2px solid var(--pv-focus);
+    outline-offset: 2px;
+  }
+}
+
+.pv-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pv-border-strong) transparent;
+}
+
+.pv-masked {
+  letter-spacing: 0.18em;
+}
+
+/* Brand panel backdrop used on auth screens. */
+.pv-brand-panel {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgb(43 195 174 / 0.35), transparent 60%),
+    radial-gradient(90% 70% at 100% 100%, rgb(11 127 114 / 0.45), transparent 60%),
+    linear-gradient(160deg, #0b1f22 0%, #08151a 55%, #060d12 100%);
+}
+
+.pv-grid-bg {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@keyframes pv-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pv-animate-in {
+  animation: pv-fade-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
