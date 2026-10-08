@@ -74,6 +74,8 @@ export interface MenuBarDeps {
   screen: () => { left: number; top: number; width: number; height: number };
   /** buddy ↔ bubble morph (UI side: BuddyLayer + .pv-morph in desktop.css); absent = no animation */
   motion?: { enabled(): boolean; wait(ms: number): Promise<void> };
+  /** one-step move + resize (shell's native bridge); the top-left moves by (dx, dy) */
+  setFrame?: (f: { dx: number; dy: number; width: number; height: number }) => boolean;
 }
 
 /**
@@ -254,6 +256,22 @@ export class MenuBar {
     return this.clamp(this._settings.bubblePos ?? { x: s.left + s.width - BUBBLE_SIZE.width - 24, y: s.top + 24 }, BUBBLE_SIZE);
   }
 
+  /**
+   * Size and position in one step when the shell can (no frame at the old place with the
+   * new size); Neutralino's own calls then only record the constraints and change nothing.
+   */
+  private async place(size: { width: number; height: number }, pos: Pos, min: { minWidth: number; minHeight: number }) {
+    const w = this.d.nl.window;
+    if (this.d.setFrame && this.d.motion) {
+      const cur = await w.getPosition().catch(() => null);
+      if (cur && this.d.setFrame({ dx: pos.x - cur.x, dy: pos.y - cur.y, width: size.width, height: size.height })) {
+        await this.d.motion.wait(32); // let the native change land before Neutralino's calls
+      }
+    }
+    await w.setSize({ ...size, ...min, resizable: false });
+    await w.move(pos.x, pos.y);
+  }
+
   /** Expanded buddy (panel). */
   showBuddy(): Promise<void> {
     return this.serial(async () => {
@@ -273,8 +291,7 @@ export class MenuBar {
       }
       // Float first: that switches to the buddy's chrome (no title bar), so the size below is the whole window.
       await w.setAlwaysOnTop(true);
-      await w.setSize({ ...BUDDY_SIZE, minWidth: 320, minHeight: 420, resizable: false });
-      await w.move(pos.x, pos.y);
+      await this.place(BUDDY_SIZE, pos, { minWidth: 320, minHeight: 420 });
       await w.show();
       await w.unminimize().catch(() => undefined);
       await w.focus();
@@ -296,7 +313,8 @@ export class MenuBar {
       let from: Pos | undefined;
       if (this._mode === 'buddy') {
         await this.rememberBuddy();
-        from = this._settings.bubblePos ? undefined : (this._settings.buddyPos ?? undefined);
+        // The card closes onto its own top-right corner: the bubble lands exactly there.
+        from = this._settings.buddyPos ?? undefined;
       } else await this.rememberFull();
       const pos = this.bubblePosition(from);
       const anim = this._mode === 'buddy' ? this.animate : null;
@@ -305,8 +323,7 @@ export class MenuBar {
         await anim.wait(MORPH_MS);
       }
       await w.setAlwaysOnTop(true); // chrome first (see showBuddy)
-      await w.setSize({ ...BUBBLE_SIZE, minWidth: BUBBLE_SIZE.width, minHeight: BUBBLE_SIZE.height, resizable: false });
-      await w.move(pos.x, pos.y);
+      await this.place(BUBBLE_SIZE, pos, { minWidth: BUBBLE_SIZE.width, minHeight: BUBBLE_SIZE.height });
       await w.show();
       this._mode = 'bubble';
       this._morph = null;

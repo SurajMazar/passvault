@@ -25,6 +25,7 @@ import { XtermHost } from './terminal/xterm-host';
 import { createExtensions } from './extensions';
 import { DesktopOverlays } from './ui/DesktopOverlays';
 import { DesktopContext, type DesktopContextValue } from './ui/hooks';
+import { nativeBridge } from './shell/native-bridge';
 
 declare const __APP_VERSION__: string;
 
@@ -63,6 +64,11 @@ const menuBar = new MenuBar({
   motion: {
     enabled: () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+  },
+  setFrame: (f) => {
+    const bridge = nativeBridge();
+    bridge?.postMessage({ cmd: 'frame', ...f });
+    return !!bridge;
   },
   setHotKey: async (sc) => {
     if (!helper.isReady) return; // registered when the helper (re)connects
@@ -192,8 +198,10 @@ function BuddyLayer({ server }: { server: string }) {
     document.documentElement.dataset.pvWindow = mode;
   }, [mode]);
   if (mode === 'bubble') {
+    // Top-right corner: while the buddy floats, the page keeps its buddy-sized layout and
+    // the bubble window shows just this corner (scripts/pvwindow.m, PVLayoutContent).
     return (
-      <div className="fixed inset-0 z-[55]">
+      <div className="fixed top-0 right-0 z-[55] size-[96px]">
         <BuddyBubble menuBar={menuBar} />
       </div>
     );

@@ -55,7 +55,8 @@ static NSWindow *gMain;       // the app window while the buddy is out
 static PVBuddyPanel *gPanel;  // the buddy panel (created once)
 static BOOL gFloating;        // buddy mode
 static BOOL gSyncing;         // guard against frame mirroring loops
-static id gMoveObserver, gResizeObserver;
+static id gMoveObserver, gResizeObserver, gPanelResizeObserver;
+static NSView *gContent;      // the app's content (WKWebView host) while it lives in the panel
 
 typedef void (*SetLevelIMP)(id, SEL, NSInteger);
 typedef void (*SetFrameIMP)(id, SEL, NSRect, BOOL);
@@ -132,6 +133,24 @@ static PVBuddyPanel *PVPanel(void) {
     return gPanel;
 }
 
+/**
+ * The page keeps its buddy-sized layout while the panel shrinks to the bubble: the
+ * content stays as large as it was, pinned to the panel's top-right corner, where the
+ * page draws the bubble. So minimizing and expanding never re-lay out (or repaint) the
+ * page mid-change — no flicker. A buddy-sized panel (≥ 200 pt) gets content of its size.
+ */
+static void PVLayoutContent(void) {
+    if (!gContent || !gPanel) return;
+    NSSize ps = gPanel.contentView.bounds.size;
+    if (ps.width >= 200 && ps.height >= 200) {
+        gContent.frame = (NSRect){NSZeroPoint, ps};
+        return;
+    }
+    NSSize cs = gContent.frame.size;
+    if (cs.width < ps.width || cs.height < ps.height) cs = ps;
+    gContent.frame = (NSRect){{ps.width - cs.width, ps.height - cs.height}, cs};
+}
+
 /** Neutralino moves/resizes the stand-in app window (by whichever AppKit call); follow it. */
 static void PVFollowMain(void) {
     if (!gFloating || !gMain || gSyncing) return;
@@ -148,7 +167,16 @@ static void PVEnterBuddy(NSWindow *w) {
     gMain = w;
     NSView *content = w.contentView;
     w.contentView = [[NSView alloc] initWithFrame:content.frame];
-    p.contentView = content;
+    NSView *box = [[NSView alloc] initWithFrame:(NSRect){NSZeroPoint, content.frame.size}];
+    box.autoresizesSubviews = NO; // laid out by PVLayoutContent
+    content.frame = box.bounds;
+    [box addSubview:content];
+    p.contentView = box;
+    gContent = content;
+    gPanelResizeObserver = [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowDidResizeNotification
+                                                                             object:p
+                                                                              queue:nil
+                                                                         usingBlock:^(NSNotification *n) { (void)n; PVLayoutContent(); }];
     PVSetWebBackground(PVFindWebView(content), NO);
     gSyncing = YES;
     oSetFrame(p, @selector(setFrame:display:), w.frame, YES);
@@ -179,7 +207,11 @@ static void PVLeaveBuddy(void) {
     if (gResizeObserver) [[NSNotificationCenter defaultCenter] removeObserver:gResizeObserver];
     gMoveObserver = gResizeObserver = nil;
     PVBuddyPanel *p = gPanel;
-    NSView *content = p.contentView;
+    if (gPanelResizeObserver) [[NSNotificationCenter defaultCenter] removeObserver:gPanelResizeObserver];
+    gPanelResizeObserver = nil;
+    NSView *content = gContent ?: p.contentView;
+    gContent = nil;
+    [content removeFromSuperview];
     p.contentView = [[NSView alloc] initWithFrame:NSZeroRect];
     oOrder(p, @selector(orderWindow:relativeTo:), NSWindowOut, 0);
     PVSetWebBackground(PVFindWebView(content), YES);
@@ -324,6 +356,29 @@ static void PVSetTray(NSArray *items, WKWebView *web) {
     gTray.menu = menu;
 }
 
+// ---------------------------------------------------------------- one-step frame changes
+// Neutralino moves and resizes in two calls, so the buddy showed for a frame at the
+// wrong place. { cmd: 'frame', dx, dy, width, height } does both at once: the top-left
+// corner moves by (dx, dy) in Neutralino's top-down coordinates (relative, so it needs
+// no screen conversion) and the size becomes width × height. Applied to the stand-in
+// app window, which forwards it to the buddy panel while floating.
+
+static void PVSetFrameRelative(NSDictionary *b, NSWindow *fallback) {
+    NSNumber *dx = b[@"dx"], *dy = b[@"dy"], *wd = b[@"width"], *ht = b[@"height"];
+    for (id v in @[ dx ?: NSNull.null, dy ?: NSNull.null, wd ?: NSNull.null, ht ?: NSNull.null ]) {
+        if (![v isKindOfClass:[NSNumber class]] || !isfinite([v doubleValue])) return;
+    }
+    double W = wd.doubleValue, H = ht.doubleValue;
+    if (W < 40 || H < 40 || W > 10000 || H > 10000 || fabs(dx.doubleValue) > 20000 || fabs(dy.doubleValue) > 20000) return;
+    NSWindow *target = gFloating ? gMain : fallback;
+    if (!target) return;
+    NSRect f = target.frame;
+    double left = f.origin.x + dx.doubleValue;
+    double top = NSMaxY(f) - dy.doubleValue; // Neutralino's y grows downwards
+    [target setFrame:NSMakeRect(left, top - H, W, H) display:YES];
+    PVLayoutContent();
+}
+
 @interface PVNativeBridge : NSObject <WKScriptMessageHandler>
 @end
 
@@ -339,6 +394,8 @@ static void PVSetTray(NSArray *items, WKWebView *web) {
         [NSApp terminate:nil];
     } else if ([body[@"cmd"] isEqual:@"tray"] && [body[@"items"] isKindOfClass:[NSArray class]]) {
         PVSetTray(body[@"items"], message.webView);
+    } else if ([body[@"cmd"] isEqual:@"frame"]) {
+        PVSetFrameRelative(body, message.webView.window);
     }
 }
 @end
