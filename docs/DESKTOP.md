@@ -325,6 +325,35 @@ at any time from **Settings → Server connection** or the sign-in/lock screen
 - The desktop UI's origin is `http://127.0.0.1:47391`, so the CORS allow list
   of every server it connects to must include it (the deploy workflow adds it).
 
+### Menu-bar buddy
+
+PassVault lives in the menu bar (keyhole icon: status, Show Buddy, Open
+PassVault, Lock Vault, Settings, Quit). Closing the window keeps it running
+there (Settings → Menu bar & buddy).
+
+- **Buddy** (⌃⌥P by default, configurable; Carbon hot key in the helper — no
+  Accessibility permission): a small assistant panel above every app, on every
+  desktop and over full-screen apps. It shares the app's vault session (no
+  second unlock). "Ask me…" understands short commands locally
+  (`src/ui/assistant.ts`: copy github password, username for aws, new password
+  24, passphrase, ssh prod, save login for netflix, lock, settings); replies
+  never contain secret values. Quick Find / Save credential (title, username,
+  site, category, tags, notes, masked password, update an existing login) /
+  Generate.
+- **Bubble**: minimized buddy — the animated avatar alone (click to open, drag
+  anywhere; position remembered). Built-in avatars or the user's picture
+  (re-encoded locally to a 128×128 PNG). Its face follows the vault state.
+- **Open at login** (per-user LaunchAgent written by the helper), **quiet
+  mode**, keep-in-menu-bar, bubble on close.
+- **Native window behaviour** — `scripts/pvwindow.m` (libpvwindow.dylib, linked
+  into the Neutralino shell with an LC_LOAD_DYLIB by `scripts/add-load-command.py`;
+  no DYLD_* variables): when the UI makes the window always-on-top, the app's
+  web view moves into a borderless, transparent, non-activating panel at
+  status-bar level (all desktops, full-screen auxiliary); it moves back for the
+  full window. It also quits via `-[NSApplication terminate:]` (page message
+  `pvNative {cmd:'quit'}`, own page only) because Neutralino's `app.exit`
+  aborts on current macOS while tearing down the menu-bar item.
+
 ### Development
 
 ```sh

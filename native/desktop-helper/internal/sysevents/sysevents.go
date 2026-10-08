@@ -11,7 +11,28 @@ const (
 	ScreenUnlocked = "screen_unlocked"
 	WillSleep      = "will_sleep"
 	DidWake        = "did_wake"
+	// HotKey is the global shortcut being pressed (forwarded as hotkey.pressed, not system.event).
+	HotKey = "hotkey"
 )
+
+// Carbon modifier masks for SetHotKey.
+const (
+	ModCmd     = 1 << 8
+	ModShift   = 1 << 9
+	ModOption  = 1 << 11
+	ModControl = 1 << 12
+)
+
+// HotKeyError is returned when the shortcut cannot be registered
+// (status -9878: already taken by another application).
+type HotKeyError struct{ Status int }
+
+func (e *HotKeyError) Error() string {
+	if e.Status == -9878 {
+		return "that shortcut is already used by another application"
+	}
+	return "the shortcut could not be registered"
+}
 
 var (
 	mu        sync.Mutex
@@ -45,6 +66,8 @@ func dispatch(code int) {
 		typ = WillSleep
 	case 4:
 		typ = DidWake
+	case 5:
+		typ = HotKey
 	default:
 		return
 	}

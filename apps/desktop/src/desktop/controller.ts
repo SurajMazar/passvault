@@ -156,6 +156,24 @@ export class DesktopController {
 
   // ------------------------------------------------------------------ wiring
 
+  /** Requests waiting for the user (SSH agent signatures, host keys, login prompts). */
+  pendingApprovals(): number {
+    const st = this.store.get();
+    return st.signRequests.length + st.hostKeys.length + st.prompts.length;
+  }
+
+  /** Called whenever the number of pending approvals may have changed. */
+  onApprovalsChanged(fn: () => void): () => void {
+    let last = this.pendingApprovals();
+    return this.store.subscribe(() => {
+      const n = this.pendingApprovals();
+      if (n !== last) {
+        last = n;
+        fn();
+      }
+    });
+  }
+
   attachSession(session: SessionLike) {
     if (this.session === session) return;
     this.unsubLock?.();

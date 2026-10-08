@@ -14,6 +14,7 @@ import (
 	"github.com/passvault/desktop-helper/internal/ipc"
 	"github.com/passvault/desktop-helper/internal/keychain"
 	"github.com/passvault/desktop-helper/internal/links"
+	"github.com/passvault/desktop-helper/internal/loginitem"
 	"github.com/passvault/desktop-helper/internal/logx"
 	"github.com/passvault/desktop-helper/internal/sshconn"
 	"github.com/passvault/desktop-helper/internal/sshkeys"
@@ -31,6 +32,7 @@ type Config struct {
 	Opener   *term.Opener
 	Links    *links.Opener
 	TLS      *tlscheck.Inspector
+	Login    *loginitem.Manager
 	Log      *logx.Logger
 }
 
@@ -42,6 +44,7 @@ type App struct {
 	Term  *term.Opener
 	Links *links.Opener
 	TLS   *tlscheck.Inspector
+	Login *loginitem.Manager
 	cfg   Config
 	log   *logx.Logger
 }
@@ -82,6 +85,10 @@ func New(sender ipc.Sender, cfg Config) *App {
 	if a.TLS == nil {
 		a.TLS = &tlscheck.Inspector{}
 	}
+	a.Login = cfg.Login
+	if a.Login == nil {
+		a.Login = &loginitem.Manager{}
+	}
 	a.Term.AgentSocket = func() (string, bool) {
 		running, p, _, _ := a.Agent.Status()
 		return p, running
@@ -92,6 +99,10 @@ func New(sender ipc.Sender, cfg Config) *App {
 		a.Agent.Lock()
 	})
 	sysevents.SetHandler(func(typ string) {
+		if typ == sysevents.HotKey {
+			go a.D.EmitCurrent("hotkey.pressed", map[string]any{})
+			return
+		}
 		go a.D.EmitCurrent("system.event", map[string]string{"type": typ})
 	})
 	a.register()
@@ -280,6 +291,18 @@ type signDecisionP struct {
 	Minutes   int    `json:"minutes,omitempty"`
 }
 
+type hotkeyP struct {
+	KeyCode int  `json:"keyCode"`
+	Cmd     bool `json:"cmd"`
+	Shift   bool `json:"shift"`
+	Option  bool `json:"option"`
+	Control bool `json:"control"`
+}
+
+type loginSetP struct {
+	Enabled bool `json:"enabled"`
+}
+
 type linkOpenP struct {
 	URL string `json:"url"`
 }
@@ -323,6 +346,8 @@ func (a *App) register() {
 				"terminal":     true,
 				"links":        true,
 				"tlsInspect":   true,
+				"hotkey":       sysevents.Available(),
+				"loginItem":    true,
 				"systemEvents": sysevents.Available(),
 			},
 		}, nil
@@ -464,6 +489,49 @@ func (a *App) register() {
 		return a.TLS.Inspect(ctx, p.URL)
 	})
 
+	// Global shortcut (opens the buddy). One combination at a time; the press is
+	// delivered as the hotkey.pressed event — no key content is ever observed.
+	ipc.Register(d, "hotkey.set", ipc.Opts{}, func(_ context.Context, _ *ipc.Session, p *hotkeyP) (any, error) {
+		if p.KeyCode < 0 || p.KeyCode > 127 {
+			return nil, ipc.Errf(ipc.CodeBadRequest, "unsupported key")
+		}
+		if !p.Cmd && !p.Control && !p.Option {
+			return nil, ipc.Errf(ipc.CodeBadRequest, "use ⌘, ⌃ or ⌥ in the shortcut")
+		}
+		if p.Cmd && !p.Shift && !p.Control && !p.Option {
+			return nil, ipc.Errf(ipc.CodeBadRequest, "⌘ alone with a key would take over shortcuts other apps use; add ⇧, ⌥ or ⌃")
+		}
+		var mods uint32
+		if p.Cmd {
+			mods |= sysevents.ModCmd
+		}
+		if p.Shift {
+			mods |= sysevents.ModShift
+		}
+		if p.Option {
+			mods |= sysevents.ModOption
+		}
+		if p.Control {
+			mods |= sysevents.ModControl
+		}
+		if err := sysevents.SetHotKey(uint32(p.KeyCode), mods); err != nil {
+			return nil, ipc.Errf(ipc.CodeUnavailable, "%s", err.Error())
+		}
+		return map[string]bool{"registered": true}, nil
+	})
+	ipc.Register(d, "hotkey.clear", ipc.Opts{}, func(context.Context, *ipc.Session, *empty) (any, error) {
+		sysevents.ClearHotKey()
+		return nil, nil
+	})
+
+	// Open at login (per-user LaunchAgent; see internal/loginitem).
+	ipc.Register(d, "login.status", ipc.Opts{}, func(context.Context, *ipc.Session, *empty) (any, error) {
+		return a.Login.Status()
+	})
+	ipc.Register(d, "login.set", ipc.Opts{}, func(_ context.Context, _ *ipc.Session, p *loginSetP) (any, error) {
+		return a.Login.Set(p.Enabled)
+	})
+
 	// Files.
 	ipc.Register(d, "fs.writeExport", ipc.Opts{}, func(_ context.Context, _ *ipc.Session, p *writeExportP) (any, error) {
 		content, err := b64(p.ContentB64, fsops.MaxFileBytes)
@@ -492,5 +560,6 @@ func Ops() []string {
 		"biometric.status", "ssh.connect", "ssh.hostKeyDecision", "ssh.promptResponse", "ssh.write",
 		"ssh.resize", "ssh.disconnect", "ssh.test", "ssh.keygen", "ssh.inspectKey", "agent.status",
 		"agent.start", "agent.stop", "agent.addKey", "agent.removeKey", "agent.signDecision",
-		"term.openExternal", "link.open", "net.inspectTls", "fs.writeExport", "fs.readImport"}
+		"term.openExternal", "link.open", "net.inspectTls", "hotkey.set", "hotkey.clear", "login.status", "login.set",
+		"fs.writeExport", "fs.readImport"}
 }

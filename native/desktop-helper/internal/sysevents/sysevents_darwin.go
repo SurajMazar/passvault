@@ -4,7 +4,7 @@ package sysevents
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework Foundation -framework AppKit
+#cgo LDFLAGS: -framework Foundation -framework AppKit -framework Carbon
 #include <stdlib.h>
 #include "sysevents_darwin.h"
 */
@@ -29,6 +29,32 @@ func RunMain(app func() int) {
 	go func() { os.Exit(app()) }()
 	C.pv_sysevents_run_main()
 	select {}
+}
+
+// SetHotKey registers the global shortcut (Carbon virtual key code and
+// modifier mask), replacing any previous one. It fails when another
+// application already owns the combination.
+func SetHotKey(keyCode, modifiers uint32) error {
+	<-ready
+	if st := C.pv_hotkey_set(C.uint(keyCode), C.uint(modifiers)); st != 0 {
+		return &HotKeyError{Status: int(st)}
+	}
+	return nil
+}
+
+// ClearHotKey removes the global shortcut.
+func ClearHotKey() {
+	<-ready
+	C.pv_hotkey_clear()
+}
+
+// PostTestHotKey delivers a synthetic shortcut press through the event path (tests only).
+func PostTestHotKey() error {
+	<-ready
+	if st := C.pv_hotkey_post_test(); st != 0 {
+		return &HotKeyError{Status: int(st)}
+	}
+	return nil
 }
 
 // AddTestName registers an extra distributed-notification name mapped to an

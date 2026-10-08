@@ -18,3 +18,12 @@ func AddTestName(string, int) {}
 
 // PostTest is a no-op off macOS.
 func PostTest(string) {}
+
+// SetHotKey is not supported off macOS.
+func SetHotKey(uint32, uint32) error { return &HotKeyError{Status: -1} }
+
+// ClearHotKey is a no-op off macOS.
+func ClearHotKey() {}
+
+// PostTestHotKey is not supported off macOS.
+func PostTestHotKey() error { return &HotKeyError{Status: -1} }

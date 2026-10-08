@@ -14,7 +14,20 @@ function fakeNl(overrides: Partial<NeutralinoLike> = {}): NeutralinoLike {
     events: { on: async () => undefined, off: async () => undefined },
     extensions: { dispatch: async () => undefined, getStats: async () => ({ loaded: [], connected: [] }) },
     app: { exit: async () => undefined },
-    window: { show: async () => undefined, focus: async () => undefined, unminimize: async () => undefined, setMainMenu: async () => undefined },
+    window: {
+      show: async () => undefined,
+      focus: async () => undefined,
+      unminimize: async () => undefined,
+      setMainMenu: async () => undefined,
+      hide: async () => undefined,
+      isVisible: async () => true,
+      getSize: async () => ({ width: 1240, height: 820 }),
+      setSize: async () => undefined,
+      getPosition: async () => ({ x: 0, y: 0 }),
+      move: async () => undefined,
+      setAlwaysOnTop: async () => undefined,
+      beginDrag: async () => undefined,
+    },
     os: { showOpenDialog: async () => [], showSaveDialog: async () => '', setTray: async () => undefined },
     storage: {
       getData: async (k) => {

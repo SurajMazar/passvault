@@ -10,3 +10,191 @@
 .pv-xterm .xterm-viewport {
   background-color: #0c1117 !important;
 }
+
+/* Menu-bar buddy (src/shell/menu-bar.ts): the window is transparent and borderless while the
+   buddy or its bubble is shown, so only their own rounded shapes are visible. */
+html[data-pv-window='buddy'],
+html[data-pv-window='buddy'] body,
+html[data-pv-window='bubble'],
+html[data-pv-window='bubble'] body {
+  background: transparent;
+}
+@keyframes pv-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes pv-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+.pv-bubble {
+  animation: pv-bob 3.2s ease-in-out infinite;
+}
+.pv-bubble-alert {
+  animation: pv-pulse 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-bubble,
+  .pv-bubble-alert {
+    animation: none;
+  }
+}
+
+/* Buddy character animation (src/ui/avatars.tsx). SVG parts animate around their own box. */
+.pv-av g,
+.pv-av text,
+.pv-av circle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.pv-breathe {
+  animation: pv-breathe 4.2s ease-in-out infinite;
+}
+.pv-sleep {
+  animation: pv-breathe 6s ease-in-out infinite;
+}
+.pv-blink {
+  animation: pv-blink 5.5s ease-in-out infinite;
+}
+.pv-zzz {
+  animation: pv-zzz 2.6s ease-in-out infinite;
+  opacity: 0;
+}
+.pv-zzz-2 {
+  animation-delay: 1.3s;
+}
+.pv-dot {
+  animation: pv-dot 1.2s ease-in-out infinite;
+}
+.pv-dot-2 {
+  animation-delay: 0.2s;
+}
+.pv-dot-3 {
+  animation-delay: 0.4s;
+}
+.pv-alert-badge {
+  animation: pv-badge 0.9s ease-in-out infinite;
+}
+.pv-react-hop {
+  animation: pv-hop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.pv-react-shake {
+  animation: pv-shake 0.45s ease-in-out;
+}
+.pv-say {
+  animation: pv-say 0.25s ease-out;
+}
+@keyframes pv-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-1px) scale(1.02);
+  }
+}
+@keyframes pv-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes pv-zzz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 4px) scale(0.7);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(4px, -8px) scale(1.1);
+  }
+}
+@keyframes pv-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+@keyframes pv-badge {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.12);
+  }
+}
+@keyframes pv-hop {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  30% {
+    transform: translateY(-6px) scale(0.96, 1.05);
+  }
+  60% {
+    transform: translateY(0) scale(1.05, 0.95);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+@keyframes pv-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px) rotate(-4deg);
+  }
+  75% {
+    transform: translateX(3px) rotate(4deg);
+  }
+}
+@keyframes pv-say {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-breathe,
+  .pv-sleep,
+  .pv-blink,
+  .pv-zzz,
+  .pv-dot,
+  .pv-alert-badge,
+  .pv-react-hop,
+  .pv-react-shake,
+  .pv-say {
+    animation: none;
+  }
+  .pv-zzz {
+    opacity: 1;
+  }
+}

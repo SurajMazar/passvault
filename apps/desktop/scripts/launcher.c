@@ -13,6 +13,9 @@
  * Arguments passed to the app (e.g. `open PassVault.app --args …`) are NOT
  * forwarded: Neutralino accepts config overrides on the command line
  * (--url, --enable-inspector, …) and the bundled configuration must win.
+ * The one exception is the exact flag `--background` (set by the "Open at
+ * login" LaunchAgent: start in the menu bar), which is not a Neutralino
+ * option and only reaches the UI through NL_ARGS.
  */
 #include <errno.h>
 #include <libgen.h>
@@ -24,8 +27,10 @@
 #include <unistd.h>
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    int background = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--background") == 0) background = 1;
+    }
     char exe[PATH_MAX];
     uint32_t size = sizeof(exe);
     if (_NSGetExecutablePath(exe, &size) != 0) {
@@ -57,7 +62,8 @@ int main(int argc, char **argv) {
     }
     snprintf(pathArg, sizeof(pathArg), "--path=%s", res);
 
-    char *args[] = {shell, pathArg, NULL};
+    char bgArg[] = "--background";
+    char *args[] = {shell, pathArg, background ? bgArg : NULL, NULL};
     execv(shell, args);
     fprintf(stderr, "PassVault: cannot start %s: %s\n", shell, strerror(errno));
     return 115;

@@ -18,6 +18,15 @@ const NEEDED = new Set([
   'window.focus',
   'window.unminimize',
   'window.setMainMenu',
+  // menu-bar buddy (src/shell/menu-bar.ts only; checked below)
+  'window.hide',
+  'window.isVisible',
+  'window.getSize',
+  'window.setSize',
+  'window.getPosition',
+  'window.move',
+  'window.setAlwaysOnTop',
+  'window.beginDrag',
   'os.showOpenDialog',
   'os.showSaveDialog',
   'os.setTray',
@@ -32,7 +41,7 @@ const NEEDED = new Set([
   'clipboard.writeText',
 ]);
 /** Never acceptable for a webview that renders vault data. */
-const DANGEROUS = /^(os\.(execCommand|spawnProcess|open|getEnv|getEnvs)|filesystem\.|app\.(readProcessInput|writeProcessOutput)|debug\.|computer\.|window\.(setSize|move)|extensions\.(broadcast))/;
+const DANGEROUS = /^(os\.(execCommand|spawnProcess|open|getEnv|getEnvs)|filesystem\.|app\.(readProcessInput|writeProcessOutput)|debug\.|computer\.|window\.(create|snapshot|print)|extensions\.(broadcast))/;
 
 const suite: Suite = {
   id: 'desktop',
@@ -62,6 +71,12 @@ const suite: Suite = {
       const unused = list.filter((a) => !NEEDED.has(a));
       return { ok: dangerous.length === 0 && unused.length === 0, evidence: `allowlist (${list.length}): ${list.join(', ')}\ndangerous: ${dangerous.join(', ') || 'none'}; not needed by the UI: ${unused.join(', ') || 'none'}` };
     }, { severity: 'high', finding: 'PV-SEC-002' });
+
+    await t.check('desktop.window-geometry-scoped', 'Window move/resize/always-on-top are used only by the menu-bar buddy controller', () => {
+      const hits = gitGrep('window\\.(setSize|move|setAlwaysOnTop|beginDrag)\\(', ['apps/desktop/src'], { extended: true }).filter((l) => !/\.test\.tsx?:/.test(l));
+      const outside = hits.filter((l) => !l.startsWith('apps/desktop/src/shell/menu-bar.ts:'));
+      return { ok: hits.length > 0 && outside.length === 0, evidence: `call sites:\n${hits.join('\n') || 'none'}\noutside menu-bar.ts: ${outside.length}` };
+    }, { severity: 'medium' });
 
     await t.check('desktop.no-direct-native-exec', 'UI code never calls shell-backed or process APIs directly', () => {
       const hits = gitGrep('(nl|Neutralino)\\.os\\.(open|execCommand|spawnProcess)|filesystem\\.', ['apps/desktop/src'], { extended: true }).filter((l) => !/\.test\.tsx?:/.test(l));
@@ -166,7 +181,7 @@ const suite: Suite = {
       }
 
       await t.check('desktop.runtime.process-args', 'No secrets in the command lines of the app and helper processes', () => {
-        const ps = spawnSync('ps', ['-axww', '-o', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n').filter((l) => /neutralino-mac|pv-helper/.test(l));
+        const ps = spawnSync('ps', ['-axww', '-o', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n').filter((l) => /neutralino-mac|passvault-shell|pv-helper/.test(l));
         const suspicious = ps.filter((l) => /token|secret|password|key=|NL_TOKEN/i.test(l));
         return { ok: ps.length >= 2 && suspicious.length === 0, evidence: `${ps.length} processes:\n${ps.map((l) => l.trim().replace(homedir(), '~')).join('\n')}\nsuspicious arguments: ${suspicious.length}` };
       }, { severity: 'high' });
@@ -220,7 +235,7 @@ const suite: Suite = {
       } catch {
         /* already gone */
       }
-      spawnSync('pkill', ['-f', 'neutralino-mac_arm64.*io.passvault.desktop.verify|\\.build/verify']);
+      spawnSync('pkill', ['-9', '-f', 'passvault-shell --res-mode|neutralino-mac_arm64.*io.passvault.desktop.verify|\\.build/verify']);
       await sleep(500);
     }
   },

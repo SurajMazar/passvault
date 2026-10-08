@@ -42,3 +42,34 @@ func TestDistributedNotificationForwarded(t *testing.T) {
 		t.Fatal("notification not delivered")
 	}
 }
+
+func TestHotKeyRegisteredAndDelivered(t *testing.T) {
+	if !Available() {
+		t.Skip("macOS only")
+	}
+	<-Ready()
+	// F19 (virtual key 80) with ⌃⌥⌘: unlikely to be owned by anything else.
+	if err := SetHotKey(80, ModControl|ModOption|ModCmd); err != nil {
+		t.Skipf("no window-server session for global shortcuts: %v", err)
+	}
+	defer ClearHotKey()
+	got := make(chan string, 4)
+	SetHandler(func(typ string) { got <- typ })
+	defer SetHandler(nil)
+	if err := PostTestHotKey(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case typ := <-got:
+		if typ != HotKey {
+			t.Fatalf("got %q", typ)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shortcut press not delivered")
+	}
+	// Replacing and clearing never deadlock the main thread.
+	if err := SetHotKey(79, ModControl|ModOption|ModCmd); err != nil {
+		t.Fatal(err)
+	}
+	ClearHotKey()
+}

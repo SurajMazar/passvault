@@ -74,6 +74,10 @@ export interface HelloResult {
     links?: boolean;
     /** net.inspectTls: certificate diagnosis for the server connection test */
     tlsInspect?: boolean;
+    /** global shortcut (hotkey.set) */
+    hotkey?: boolean;
+    /** open at login (login.status / login.set) */
+    loginItem?: boolean;
     systemEvents: boolean;
   };
 }
@@ -161,6 +165,8 @@ export interface HelperEventMap {
   'agent.signRequest': SignRequestEvent;
   'agent.state': { running: boolean; locked: boolean };
   'system.event': SystemEvent;
+  /** the global shortcut was pressed (no key data) */
+  'hotkey.pressed': Record<string, never>;
   'helper.error': { message: string };
 }
 

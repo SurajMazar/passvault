@@ -21,6 +21,15 @@ export interface NeutralinoLike {
     focus(): Promise<unknown>;
     unminimize(): Promise<unknown>;
     setMainMenu(menu: unknown): Promise<unknown>;
+    // menu-bar buddy (src/shell/menu-bar.ts)
+    hide(): Promise<unknown>;
+    isVisible(): Promise<boolean>;
+    getSize(): Promise<{ width?: number; height?: number }>;
+    setSize(options: { width?: number; height?: number; minWidth?: number; minHeight?: number; resizable?: boolean }): Promise<unknown>;
+    getPosition(): Promise<{ x: number; y: number }>;
+    move(x: number, y: number): Promise<unknown>;
+    setAlwaysOnTop(onTop: boolean): Promise<unknown>;
+    beginDrag(screenX: number, screenY: number): Promise<unknown>;
   };
   os: {
     showOpenDialog(title?: string, options?: { filters?: Array<{ name: string; extensions: string[] }>; multiSelections?: boolean; defaultPath?: string }): Promise<string[]>;

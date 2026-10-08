@@ -1,10 +1,10 @@
-import { StrictMode, useEffect, useMemo, useState } from 'react';
+import { StrictMode, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as NL from '@neutralinojs/lib';
 import '@xterm/xterm/css/xterm.css';
 import './desktop.css';
 import { PassVaultApp, useUi } from '@passvault/app';
-import type { VaultSession } from '@passvault/vault-core';
+import { serverLabel, type SessionSnapshot, type VaultSession } from '@passvault/vault-core';
 import { HelperClient } from './ipc/helper-client';
 import { helperTransport, type NeutralinoLike } from './neutralino';
 import { DesktopController } from './desktop/controller';
@@ -16,6 +16,10 @@ import { neutralinoKV } from './platform/storage';
 import { ServerPickerRow, ServerSettings } from './ui/ServerPicker';
 import { openExternalConfirmed } from './platform/links';
 import { NativeShell } from './shell/native-shell';
+import { MenuBar, type VaultState } from './shell/menu-bar';
+import { helperParams } from './shell/shortcut';
+import { BuddyBubble, BuddyNav, BuddyView } from './ui/BuddyView';
+import { MenuBarSettings } from './ui/MenuBarSettings';
 import { XtermHost } from './terminal/xterm-host';
 import { createExtensions } from './extensions';
 import { DesktopOverlays } from './ui/DesktopOverlays';
@@ -51,7 +55,21 @@ const helper = new HelperClient(
 connection = new HelperConnection(nl, helper);
 const clipboard = new DesktopClipboard(nl.clipboard);
 
-let shell: NativeShell;
+const kv = neutralinoKV(nl);
+const menuBar = new MenuBar({
+  nl,
+  kv,
+  setHotKey: async (sc) => {
+    if (!helper.isReady) return; // registered when the helper (re)connects
+    if (sc) await helper.request('hotkey.set', helperParams(sc));
+    else await helper.request('hotkey.clear', {});
+  },
+  screen: () => {
+    const sc = window.screen as Screen & { availLeft?: number; availTop?: number };
+    return { left: sc.availLeft ?? 0, top: sc.availTop ?? 0, width: sc.availWidth, height: sc.availHeight };
+  },
+});
+const buddyNav = new BuddyNav();
 const controller = new DesktopController(
   helper,
   {
@@ -60,7 +78,7 @@ const controller = new DesktopController(
       const item = session?.getSnapshot().items.find((i) => i.id === itemId);
       if (item) useUi.getState().go(item.payload.type, { selectedId: item.id });
     },
-    bringToFront: () => void shell?.bringToFront(),
+    bringToFront: () => void menuBar.showFull(),
   },
   { onLocked: () => void clipboard.clearIfUnchanged() },
 );
@@ -83,13 +101,31 @@ const xterm = new XtermHost(controller, {
 });
 controller.setTerminalHost(xterm);
 
-shell = new NativeShell(nl, {
+const shell = new NativeShell(nl, menuBar, {
   lockVault: () => session?.lock(),
   beforeExit: () => clipboard.clearIfUnchanged(),
   openLink,
+  quickSave: () => buddyNav.open('save'),
+  generate: () => buddyNav.open('generate'),
+  openSettings: () => useUi.getState().go('settings'),
 });
 
-const kv = neutralinoKV(nl);
+// Global shortcut: (re)registered with every helper session; a press toggles the buddy.
+helper.onStatus((st) => {
+  if (st.state === 'ready') void menuBar.registerHotKey().catch(() => undefined);
+});
+helper.on('hotkey.pressed', () => void menuBar.toggleBuddy());
+
+/** Vault state for the menu bar and the buddy. */
+function vaultState(s: SessionSnapshot): VaultState {
+  if (s.auth.phase === 'locked') return 'locked';
+  if (s.auth.phase !== 'unlocked') return 'signed_out';
+  if (controller.pendingApprovals() > 0) return 'awaiting_approval';
+  if (!s.online) return 'offline';
+  if (s.sync.lastError) return 'connection_error';
+  if (s.sync.state === 'syncing') return 'syncing';
+  return 'ready';
+}
 const makePlatform = (server: string) =>
   createDesktopPlatform({
     nl,
@@ -112,10 +148,69 @@ const ctx: DesktopContextValue = {
   copyText: (t) => clipboard.copyText(t),
 };
 
+let unwatchSession: (() => void) | null = null;
+const sessionListeners = new Set<() => void>();
 const onSession = (s: VaultSession) => {
   session = s;
   controller.attachSession(s);
+  unwatchSession?.();
+  unwatchSession = s.subscribe((snap) => menuBar.setVaultState(vaultState(snap)));
+  menuBar.setVaultState(vaultState(s.getSnapshot()));
+  for (const l of sessionListeners) l();
 };
+controller.onApprovalsChanged(() => session && menuBar.setVaultState(vaultState(session.getSnapshot())));
+
+/** The buddy uses the app's current session (same unlock), rendered when the window is in buddy mode. */
+function BuddyLayer({ server }: { server: string }) {
+  const mode = useSyncExternalStore(
+    (cb) => menuBar.subscribe(cb),
+    () => menuBar.mode,
+  );
+  const s = useSyncExternalStore(
+    (cb) => {
+      sessionListeners.add(cb);
+      return () => sessionListeners.delete(cb);
+    },
+    () => session,
+  );
+  useEffect(() => {
+    document.documentElement.dataset.pvWindow = mode;
+  }, [mode]);
+  if (mode === 'bubble') {
+    return (
+      <div className="fixed inset-0 z-[55]">
+        <BuddyBubble menuBar={menuBar} />
+      </div>
+    );
+  }
+  if (mode !== 'buddy' || !s) return null;
+  return (
+    <div className="fixed inset-0 z-[55]">
+      <BuddyView
+        session={s}
+        menuBar={menuBar}
+        nav={buddyNav}
+        serverLabel={serverLabel(server)}
+        actions={{
+          copySecret: (t, secs) => clipboard.copySecret(t, secs),
+          copyText: (t) => clipboard.copyText(t),
+          openInApp: (itemId) => {
+            void menuBar.showFull().then(() => {
+              const item = itemId ? s.getSnapshot().items.find((i) => i.id === itemId) : undefined;
+              if (item) useUi.getState().go(item.payload.type, { selectedId: item.id });
+            });
+          },
+          connect: async (itemId) => {
+            await menuBar.showFull();
+            await controller.connect(itemId);
+          },
+          biometricsAvailable: () => s.biometricsEnabled(),
+          openSettings: () => void menuBar.showFull().then(() => useUi.getState().go('settings')),
+        }}
+      />
+    </div>
+  );
+}
 
 /** Set by Root: shows the app for another server. */
 let showServer: (url: string) => void = () => undefined;
@@ -146,14 +241,43 @@ function Root({ servers }: { servers: DesktopServers }) {
     () => ({
       ...baseExtensions,
       authFooter: () => <ServerPickerRow servers={servers} />,
-      settingsSections: [...(baseExtensions.settingsSections ?? []), { id: 'server', label: 'Server connection', render: () => <ServerSettings servers={servers} /> }],
+      settingsSections: [
+        ...(baseExtensions.settingsSections ?? []),
+        { id: 'server', label: 'Server connection', render: () => <ServerSettings servers={servers} /> },
+        {
+          id: 'menubar',
+          label: 'Menu bar & buddy',
+          render: () => (
+            <MenuBarSettings
+              menuBar={menuBar}
+              loginItem={{ status: () => helper.request('login.status', {}), set: (enabled) => helper.request('login.set', { enabled }) }}
+              capabilities={{ hotkey: !!helper.status.hello?.capabilities.hotkey, loginItem: !!helper.status.hello?.capabilities.loginItem }}
+            />
+          ),
+        },
+      ],
     }),
     [servers],
   );
-  return <PassVaultApp key={server} platform={platform} platformName="desktop" extensions={extensions} onSession={onSession} />;
+  const mode = useSyncExternalStore(
+    (cb) => menuBar.subscribe(cb),
+    () => menuBar.mode,
+  );
+  return (
+    <>
+      {/* Kept mounted (state, terminals) but not drawn while the buddy or its bubble is shown. */}
+      <div style={{ display: mode === 'buddy' || mode === 'bubble' ? 'none' : 'contents' }}>
+        <PassVaultApp key={server} platform={platform} platformName="desktop" extensions={extensions} onSession={onSession} />
+      </div>
+      <BuddyLayer server={server} />
+    </>
+  );
 }
 
 async function boot() {
+  await menuBar.load();
+  // Opened at login (LaunchAgent passes --background): start in the menu bar only.
+  if (String(window.NL_MODE) === 'window' && (window.NL_ARGS ?? []).includes('--background')) void menuBar.hide();
   const servers = await DesktopServers.load(
     {
       kv,

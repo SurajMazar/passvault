@@ -1,20 +1,26 @@
 import type { NeutralinoLike } from '../neutralino';
+import type { MenuBar } from './menu-bar';
 
 /**
  * macOS shell integration: main menu (needed for ⌘C/⌘V/⌘A in a WKWebView),
- * menu-bar (tray) menu, and the window-close / quit flow.
+ * the menu-bar (tray) menu, and the window-close / quit flow.
  *
  * `exitProcessOnClose` is false in neutralino.config.json, so closing the
- * window raises `windowClose` for both this UI and the helper extension. We
- * lock (wiping keys in this process), clear our clipboard secret if it is
- * still there, and exit. The helper cleans up on its own `windowClose` /
- * socket close. Nothing secret is sent on exit.
+ * window raises `windowClose`. With "Keep PassVault in the menu bar" (the
+ * default) the window is hidden and PassVault stays available from the menu
+ * bar and the global shortcut; the vault keeps its normal auto-lock. Quit (⌘Q
+ * or the menu) locks (wiping keys in this process), clears our clipboard
+ * secret if it is still there, and exits. Nothing secret is sent on exit.
  */
 
 export interface ShellDeps {
   lockVault(): void;
   beforeExit(): Promise<unknown>;
   openLink(url: string): void;
+  /** quick actions from the menu bar */
+  quickSave(): void;
+  generate(): void;
+  openSettings(): void;
 }
 
 const MENU_CB = 'menuCallback:';
@@ -24,6 +30,7 @@ export const MAIN_MENU = [
     id: 'app',
     text: 'PassVault',
     menuItems: [
+      { id: 'buddy', text: 'Show Buddy', action: MENU_CB, shortcut: 'b' },
       { id: 'lock', text: 'Lock Vault', action: MENU_CB, shortcut: 'L' },
       { text: '-' },
       { id: 'hide', text: 'Hide PassVault', action: 'hide:', shortcut: 'h' },
@@ -57,27 +64,21 @@ export const MAIN_MENU = [
   },
 ];
 
-export const TRAY_MENU = [
-  { id: 'open', text: 'Open PassVault' },
-  { id: 'lock', text: 'Lock vault' },
-  { id: 'sep', text: '-' },
-  { id: 'quit', text: 'Quit PassVault' },
-];
-
 export class NativeShell {
   private quitting = false;
 
   constructor(
     private readonly nl: NeutralinoLike,
+    private readonly menuBar: MenuBar,
     private readonly deps: ShellDeps,
   ) {}
 
   async install() {
     await this.nl.window.setMainMenu(MAIN_MENU).catch(() => undefined);
-    await this.nl.os.setTray({ icon: '/resources/icons/trayIcon.png', menuItems: TRAY_MENU, useTemplateIcon: true } as never).catch(() => undefined);
+    await this.menuBar.renderTray();
     void this.nl.events.on('trayMenuItemClicked', (e) => this.onMenu((e.detail as { id?: string })?.id));
     void this.nl.events.on('mainMenuItemClicked', (e) => this.onMenu((e.detail as { id?: string })?.id));
-    void this.nl.events.on('windowClose', () => void this.quit());
+    void this.nl.events.on('windowClose', () => void this.onWindowClose());
     // window.newWindowPolicy = "custom": target=_blank / window.open requests come here.
     void this.nl.events.on('newWindowRequest', (e) => {
       const d = e.detail as { url?: string } | string;
@@ -88,8 +89,26 @@ export class NativeShell {
 
   onMenu(id: string | undefined) {
     switch (id) {
+      case 'buddy':
+        void this.menuBar.showBuddy();
+        break;
+      case 'bubble':
+        void this.menuBar.showBubble();
+        break;
       case 'open':
-        void this.bringToFront();
+        void this.menuBar.showFull();
+        break;
+      case 'save':
+        void this.menuBar.showBuddy().then(() => this.deps.quickSave());
+        break;
+      case 'generate':
+        void this.menuBar.showBuddy().then(() => this.deps.generate());
+        break;
+      case 'settings':
+        void this.menuBar.showFull().then(() => this.deps.openSettings());
+        break;
+      case 'quiet':
+        void this.menuBar.update({ quiet: !this.menuBar.settings.quiet });
         break;
       case 'lock':
         this.deps.lockVault();
@@ -100,10 +119,14 @@ export class NativeShell {
     }
   }
 
+  async onWindowClose() {
+    if (!this.menuBar.settings.keepInMenuBar || this.quitting) return this.quit();
+    // The buddy stays on screen as its bubble, or PassVault waits in the menu bar.
+    await (this.menuBar.settings.bubbleOnClose ? this.menuBar.showBubble() : this.menuBar.hide());
+  }
+
   async bringToFront() {
-    await this.nl.window.show().catch(() => undefined);
-    await this.nl.window.unminimize().catch(() => undefined);
-    await this.nl.window.focus().catch(() => undefined);
+    await this.menuBar.showFull();
   }
 
   async quit() {
@@ -113,6 +136,13 @@ export class NativeShell {
       this.deps.lockVault();
       await Promise.race([this.deps.beforeExit(), new Promise((r) => setTimeout(r, 800))]);
     } finally {
+      // Neutralino's app.exit tears its menu-bar item down off the main thread, which current
+      // macOS aborts on. The shell's native bridge (scripts/pvwindow.m) quits the macOS way instead.
+      const bridge = (globalThis as unknown as { webkit?: { messageHandlers?: { pvNative?: { postMessage(m: unknown): void } } } }).webkit?.messageHandlers?.pvNative;
+      if (bridge) {
+        bridge.postMessage({ cmd: 'quit' });
+        await new Promise((r) => setTimeout(r, 1500)); // normally never returns: the app terminates
+      }
       await this.nl.app.exit(0);
     }
   }

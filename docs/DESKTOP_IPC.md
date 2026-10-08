@@ -69,6 +69,9 @@ Error codes: `bad_request`, `unknown_op`, `invalid_session`, `not_found`,
 | `term.openExternal` | `{ app: 'terminal'\|'iterm', target: HopPublic, jump?: HopPublic, trustedHostKeys: HostKey[], useAgent }` | `{}` | writes a 0700 `.command` script containing only validated, shell-quoted, non-secret arguments and a per-connection `known_hosts` file; never passwords |
 | `link.open` | `{ url }` | `{}` | http/https with a host only, no credentials/whitespace/control characters; launches `/usr/bin/open <url>` with an argv list (no shell). Replaces Neutralino `os.open` (PV-SEC-002) |
 | `net.inspectTls` | `{ url }` | `{ ok, reason?, message, subject?, issuer?, notAfter? }` | `https://` address only, no credentials. Dials host:port and performs only the TLS handshake (TLS ≥ 1.2, system trust store — honours CAs trusted in Keychain Access); sends no HTTP request. `reason`: `expired`, `not_yet_valid`, `hostname`, `untrusted`, `unreachable`, `handshake`. Used by Settings → Server connection to explain a failed connection test |
+| `hotkey.set` | `{ keyCode, cmd, shift, option, control }` | `{ registered }` | One global shortcut (Carbon `RegisterEventHotKey`, no Accessibility permission); needs ⌘/⌃/⌥, and ⌘ alone with a key is refused. A press arrives as the `hotkey.pressed` event (no key data) |
+| `hotkey.clear` | `{}` | `{}` | Removes the shortcut |
+| `login.status` / `login.set` | `{}` / `{ enabled }` | `{ enabled, stale, app? }` | Open at login: writes or removes `~/Library/LaunchAgents/io.passvault.desktop.login.plist` (fixed content: `/usr/bin/open -g -a <this app> --args --background`) |
 | `fs.writeExport` | `{ path, contentB64, overwrite }` | `{ path, mode: '0600' }` | absolute path, regular file, `O_NOFOLLOW`; refuses to replace unless `overwrite` |
 | `fs.readImport` | `{ path, maxBytes }` | `{ contentB64, size }` | regular files ≤ 5 MiB |
 

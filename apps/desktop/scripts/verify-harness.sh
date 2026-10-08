@@ -31,5 +31,6 @@ HELPER="$APP/Contents/MacOS/pv-helper" MODE="$MODE" node -e '
   c.extensions = c.extensions.map((e) => e.id === "io.passvault.helper" ? { ...e, commandDarwin: JSON.stringify(process.env.HELPER) } : e);
   fs.writeFileSync(process.argv[2] + "/neutralino.config.json", JSON.stringify(c, null, 2));
 ' "$HERE" "$V"
-case "$(uname -m)" in arm64) NL_BIN="$HERE/bin/neutralino-mac_arm64" ;; *) NL_BIN="$HERE/bin/neutralino-mac_x64" ;; esac
+# The bundle's own shell: Neutralino with libpvwindow.dylib linked in, exactly as shipped.
+NL_BIN="$APP/Contents/MacOS/passvault-shell"
 exec "$NL_BIN" --res-mode=directory --path="$V"

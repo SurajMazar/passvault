@@ -81,6 +81,11 @@ clang -arch arm64 -arch x86_64 -mmacosx-version-min="$MIN_MACOS" -O2 -Wall -Wext
   -o "$BUILD/launcher-universal" scripts/launcher.c
 lipo -info "$BUILD/launcher-universal"
 
+log "libpvwindow.dylib (buddy floats above every app; see scripts/pvwindow.m)"
+clang -arch arm64 -arch x86_64 -mmacosx-version-min="$MIN_MACOS" -dynamiclib -fobjc-arc -O2 -Wall -Wextra -Werror \
+  -framework AppKit -framework WebKit -install_name @executable_path/libpvwindow.dylib -o "$BUILD/libpvwindow.dylib" scripts/pvwindow.m
+lipo -info "$BUILD/libpvwindow.dylib"
+
 log "App icon (.icns)"
 ICONSET="$BUILD/PassVault.iconset"
 mkdir -p "$ICONSET"
@@ -103,17 +108,24 @@ assemble() { # assemble <arch: universal|arm64|x64> <app path>
   case "$arch" in
     universal)
       cp bin/neutralino-mac_universal "$c/MacOS/passvault-shell"
+      cp "$BUILD/libpvwindow.dylib" "$c/MacOS/libpvwindow.dylib"
       cp "$BUILD/launcher-universal" "$c/MacOS/PassVault"
       cp "$HELPER_DIR/bin/pv-helper-universal" "$BUILD/pv-helper.$arch" ;;
     arm64)
       cp bin/neutralino-mac_arm64 "$c/MacOS/passvault-shell"
+      slice "$BUILD/libpvwindow.dylib" arm64 "$c/MacOS/libpvwindow.dylib"
       slice "$BUILD/launcher-universal" arm64 "$c/MacOS/PassVault"
       cp "$HELPER_DIR/bin/pv-helper-arm64" "$BUILD/pv-helper.$arch" ;;
     x64)
       cp bin/neutralino-mac_x64 "$c/MacOS/passvault-shell"
+      slice "$BUILD/libpvwindow.dylib" x86_64 "$c/MacOS/libpvwindow.dylib"
       slice "$BUILD/launcher-universal" x86_64 "$c/MacOS/PassVault"
       cp "$HELPER_DIR/bin/pv-helper-amd64" "$BUILD/pv-helper.$arch" ;;
   esac
+  # Link the buddy window library into the shell (LC_LOAD_DYLIB; no DYLD_* variables).
+  codesign --remove-signature "$c/MacOS/passvault-shell" 2>/dev/null || true
+  python3 scripts/add-load-command.py "$c/MacOS/passvault-shell" @executable_path/libpvwindow.dylib >/dev/null
+  otool -L "$c/MacOS/passvault-shell" | grep -q '@executable_path/libpvwindow.dylib' || { echo "libpvwindow.dylib not linked" >&2; exit 1; }
   if [[ "$HELPER_LAYOUT" == "bundle" ]]; then
     local h="$c/Helpers/PassVault Helper.app/Contents"
     mkdir -p "$h/MacOS"
@@ -136,6 +148,7 @@ assemble() { # assemble <arch: universal|arm64|x64> <app path>
   else
     codesign --force --sign - --identifier io.passvault.helper "$c/MacOS/pv-helper"
   fi
+  codesign --force --sign - --identifier io.passvault.desktop.window "$c/MacOS/libpvwindow.dylib"
   codesign --force --sign - --identifier io.passvault.desktop.shell "$c/MacOS/passvault-shell"
   codesign --force --deep --sign - "$app"
   codesign --verify --deep --strict "$app"
