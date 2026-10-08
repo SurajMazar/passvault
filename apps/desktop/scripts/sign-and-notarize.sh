@@ -77,7 +77,8 @@ echo "==> Neutralino shell + app bundle"
 # processes, so neither allow-jit nor unsigned-executable-memory is needed.
 # libpvwindow.dylib is loaded by the shell (LC_LOAD_DYLIB): same Team ID, so library validation passes.
 run "${SIGN[@]}" --identifier io.passvault.desktop.window "$C/MacOS/libpvwindow.dylib"
-run "${SIGN[@]}" --identifier io.passvault.desktop.shell "$C/MacOS/passvault-shell"
+# The shell is the app's executable: it carries the app's identifier.
+run "${SIGN[@]}" --identifier io.passvault.desktop --entitlements "$HERE/scripts/entitlements.app.plist" "$C/MacOS/passvault-shell"
 run "${SIGN[@]}" --entitlements "$HERE/scripts/entitlements.app.plist" "$APP"
 run codesign --verify --deep --strict --verbose=2 "$APP"
 run codesign -dvv "$APP"

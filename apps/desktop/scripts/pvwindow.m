@@ -27,6 +27,9 @@
 // origin) — which quits through -[NSApplication terminate:], so Neutralino's
 // teardown never runs; the helper exits when its parent is gone.
 //
+// And it owns the menu-bar item: { cmd: 'tray', items } from the same page builds
+// it on the main thread (Neutralino's os.setTray shows nothing on current macOS).
+//
 // Only PassVault's own app window is involved (the titled window that hosts
 // the WKWebView); menus, tooltips, sheets and system windows pass through
 // untouched. Nothing else is read or changed: no page content, no data.
@@ -253,6 +256,67 @@ static void PVRemoveStatusItem(id self, SEL _cmd, NSStatusItem *item) {
 
 // ---------------------------------------------------------------- quit bridge
 
+// ---------------------------------------------------------------- menu-bar item
+// Neutralino's os.setTray builds its NSStatusItem on its server thread; current
+// macOS silently shows nothing for it. The page sends the menu here instead
+// ({ cmd: 'tray', items: [{ id, text, isDisabled }] }, text '-' = separator) and
+// the item is built on the main thread. A click dispatches a 'pv-tray' DOM event
+// carrying only the item's id back to the page.
+
+static NSStatusItem *gTray;
+static __weak WKWebView *gTrayWeb;
+
+@interface PVTrayTarget : NSObject
+@end
+
+@implementation PVTrayTarget
+- (void)pick:(NSMenuItem *)item {
+    NSString *ident = item.representedObject;
+    WKWebView *web = gTrayWeb;
+    if (![ident isKindOfClass:[NSString class]] || !web) return;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:@[ ident ] options:0 error:nil];
+    if (!json) return;
+    NSString *arg = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    NSString *js = [NSString stringWithFormat:@"window.dispatchEvent(new CustomEvent('pv-tray', { detail: %@[0] }))", arg];
+    [web evaluateJavaScript:js completionHandler:nil];
+}
+@end
+
+static PVTrayTarget *gTrayTarget;
+
+static void PVSetTray(NSArray *items, WKWebView *web) {
+    gTrayWeb = web;
+    if (!gTray) {
+        gTray = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+        NSImage *icon = [NSImage imageWithSystemSymbolName:@"lock.shield" accessibilityDescription:@"PassVault"];
+        icon.template = YES;
+        gTray.button.image = icon;
+        gTray.button.toolTip = @"PassVault";
+        gTrayTarget = [PVTrayTarget new];
+    }
+    NSMenu *menu = [NSMenu new];
+    menu.autoenablesItems = NO;
+    NSUInteger n = 0;
+    for (id raw in items) {
+        if (++n > 40 || ![raw isKindOfClass:[NSDictionary class]]) continue;
+        NSDictionary *d = raw;
+        NSString *text = [d[@"text"] isKindOfClass:[NSString class]] ? d[@"text"] : nil;
+        NSString *ident = [d[@"id"] isKindOfClass:[NSString class]] ? d[@"id"] : nil;
+        if (!text) continue;
+        if ([text isEqualToString:@"-"]) {
+            [menu addItem:[NSMenuItem separatorItem]];
+            continue;
+        }
+        if (text.length > 120) text = [text substringToIndex:120];
+        NSMenuItem *mi = [[NSMenuItem alloc] initWithTitle:text action:@selector(pick:) keyEquivalent:@""];
+        mi.target = gTrayTarget;
+        mi.representedObject = ident;
+        mi.enabled = ident.length > 0 && ![d[@"isDisabled"] isEqual:@YES];
+        [menu addItem:mi];
+    }
+    gTray.menu = menu;
+}
+
 @interface PVNativeBridge : NSObject <WKScriptMessageHandler>
 @end
 
@@ -266,6 +330,8 @@ static void PVRemoveStatusItem(id self, SEL _cmd, NSStatusItem *item) {
     if ([body[@"cmd"] isEqual:@"quit"]) {
         PVLeaveBuddy();
         [NSApp terminate:nil];
+    } else if ([body[@"cmd"] isEqual:@"tray"] && [body[@"items"] isKindOfClass:[NSArray class]]) {
+        PVSetTray(body[@"items"], message.webView);
     }
 }
 @end

@@ -101,8 +101,7 @@ type Hop = HopPublic & {
 
 ## Lifecycle and cleanup
 
-- On `vault.locked`, `hello` (new session), Neutralino `windowClose`, or loss of
-  the WebSocket, the helper closes all SSH sessions, zeroes in-memory key
+- On `vault.locked`, `hello` (new session), or loss of the WebSocket, the helper closes all SSH sessions, zeroes in-memory key
   material it controls, removes agent keys, and (on exit) removes the agent
   socket. It exits when its parent connection closes so it cannot be orphaned.
 - Each SSH session runs remote commands only via an interactive shell request

@@ -123,8 +123,10 @@ func run(stdin io.Reader, o options) int {
 		case "pv.request":
 			a.D.Handle(data)
 		case "windowClose":
-			log.Info("windowClose received")
-			cancel()
+			// Closing the window does not quit PassVault: it keeps running in the
+			// menu bar (and as the buddy). The helper stays up until the app
+			// itself exits, which closes the socket (or reparents us, see above).
+			log.Info("windowClose received; app keeps running")
 		}
 	}, func(reply neutralino.Inbound) {
 		var r struct {

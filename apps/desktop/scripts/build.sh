@@ -76,11 +76,6 @@ log "pv-helper (universal)"
 make -C "$HELPER_DIR" universal VERSION="$VERSION" >/dev/null
 lipo -info "$HELPER_DIR/bin/pv-helper-universal"
 
-log "Launcher"
-clang -arch arm64 -arch x86_64 -mmacosx-version-min="$MIN_MACOS" -O2 -Wall -Wextra -Werror \
-  -o "$BUILD/launcher-universal" scripts/launcher.c
-lipo -info "$BUILD/launcher-universal"
-
 log "libpvwindow.dylib (buddy floats above every app; see scripts/pvwindow.m)"
 clang -arch arm64 -arch x86_64 -mmacosx-version-min="$MIN_MACOS" -dynamiclib -fobjc-arc -O2 -Wall -Wextra -Werror \
   -framework AppKit -framework WebKit -install_name @executable_path/libpvwindow.dylib -o "$BUILD/libpvwindow.dylib" scripts/pvwindow.m
@@ -109,17 +104,14 @@ assemble() { # assemble <arch: universal|arm64|x64> <app path>
     universal)
       cp bin/neutralino-mac_universal "$c/MacOS/passvault-shell"
       cp "$BUILD/libpvwindow.dylib" "$c/MacOS/libpvwindow.dylib"
-      cp "$BUILD/launcher-universal" "$c/MacOS/PassVault"
       cp "$HELPER_DIR/bin/pv-helper-universal" "$BUILD/pv-helper.$arch" ;;
     arm64)
       cp bin/neutralino-mac_arm64 "$c/MacOS/passvault-shell"
       slice "$BUILD/libpvwindow.dylib" arm64 "$c/MacOS/libpvwindow.dylib"
-      slice "$BUILD/launcher-universal" arm64 "$c/MacOS/PassVault"
       cp "$HELPER_DIR/bin/pv-helper-arm64" "$BUILD/pv-helper.$arch" ;;
     x64)
       cp bin/neutralino-mac_x64 "$c/MacOS/passvault-shell"
       slice "$BUILD/libpvwindow.dylib" x86_64 "$c/MacOS/libpvwindow.dylib"
-      slice "$BUILD/launcher-universal" x86_64 "$c/MacOS/PassVault"
       cp "$HELPER_DIR/bin/pv-helper-amd64" "$BUILD/pv-helper.$arch" ;;
   esac
   # Link the buddy window library into the shell (LC_LOAD_DYLIB; no DYLD_* variables).
@@ -136,8 +128,12 @@ assemble() { # assemble <arch: universal|arm64|x64> <app path>
   fi
   chmod 0755 "$c/MacOS/"*
   cp "$RES_NEU" "$c/Resources/resources.neu"
+  # The shell is the bundle's executable: macOS ties the menu-bar item (and Dock, login item) to the
+  # process that LaunchServices started, so no launcher may exec into it. Neutralino looks for its
+  # resources next to the binary; the symlink keeps the data itself in Resources (code signing).
+  ln -s ../Resources/resources.neu "$c/MacOS/resources.neu"
   cp "$BUILD/PassVault.icns" "$c/Resources/PassVault.icns"
-  write_plist "$c/Info.plist" "io.passvault.desktop" "PassVault" "PassVault" "false"
+  write_plist "$c/Info.plist" "io.passvault.desktop" "PassVault" "passvault-shell" "false"
   printf 'APPL????' > "$c/PkgInfo"
   plutil -lint "$c/Info.plist" >/dev/null
 
@@ -149,8 +145,10 @@ assemble() { # assemble <arch: universal|arm64|x64> <app path>
     codesign --force --sign - --identifier io.passvault.helper "$c/MacOS/pv-helper"
   fi
   codesign --force --sign - --identifier io.passvault.desktop.window "$c/MacOS/libpvwindow.dylib"
-  codesign --force --sign - --identifier io.passvault.desktop.shell "$c/MacOS/passvault-shell"
-  codesign --force --deep --sign - "$app"
+  # The shell is the app's executable, so it carries the app's identifier.
+  codesign --force --sign - --identifier io.passvault.desktop "$c/MacOS/passvault-shell"
+  # No --deep: it would re-sign the inner code above with generated identifiers.
+  codesign --force --sign - "$app"
   codesign --verify --deep --strict "$app"
 }
 

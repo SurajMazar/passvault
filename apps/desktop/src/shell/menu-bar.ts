@@ -1,4 +1,5 @@
 import type { KeyValueBackend } from '@passvault/sync';
+import { waitForNativeBridge } from './native-bridge';
 import type { NeutralinoLike } from '../neutralino';
 import { DEFAULT_SHORTCUT, parseShortcut, type Shortcut } from './shortcut';
 import { DEFAULT_AVATAR, parseAvatar, type AvatarChoice } from './avatar-choice';
@@ -51,6 +52,16 @@ export const BUDDY_SIZE = { width: 380, height: 580 };
 export const BUBBLE_SIZE = { width: 96, height: 96 };
 const FULL_MIN = { minWidth: 980, minHeight: 640 };
 const SETTINGS_KEY = 'pvg_menubar';
+const TRAY_ERROR_KEY = 'pvg_trayerror';
+
+function describeNlError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object') {
+    const o = e as { code?: unknown; message?: unknown };
+    return [o.code, o.message].filter((x) => typeof x === 'string' && x).join(': ') || JSON.stringify(e).slice(0, 200);
+  }
+  return String(e);
+}
 
 type Geometry = { width: number; height: number; x: number; y: number };
 
@@ -70,6 +81,8 @@ export class MenuBar {
   private fullGeometry: Geometry | null = null;
   private listeners = new Set<() => void>();
   private shortcutError: string | null = null;
+  private _trayError: string | null = null;
+  private trayRendered = false;
   private switching: Promise<void> = Promise.resolve();
 
   constructor(private readonly d: MenuBarDeps) {}
@@ -356,7 +369,27 @@ export class MenuBar {
     ];
   }
 
+  /** Why the menu-bar icon could not be shown (null when it is). */
+  get trayError(): string | null {
+    return this._trayError;
+  }
+
   async renderTray(): Promise<void> {
-    await this.d.nl.os.setTray({ icon: '/resources/icons/trayIcon.png', menuItems: this.trayMenu(), useTemplateIcon: true } as never).catch(() => undefined);
+    let error: string | null = null;
+    // The shell creates the item natively, on the main thread. Neutralino's own os.setTray works off
+    // the main thread and silently shows nothing on current macOS; it is only the fallback.
+    const bridge = await waitForNativeBridge(this.trayRendered ? 0 : 3000);
+    this.trayRendered = true;
+    try {
+      if (bridge) bridge.postMessage({ cmd: 'tray', items: this.trayMenu() });
+      else await this.d.nl.os.setTray({ icon: '/resources/icons/trayIcon.png', menuItems: this.trayMenu(), useTemplateIcon: true } as never);
+    } catch (e) {
+      error = describeNlError(e);
+    }
+    if (error === this._trayError) return;
+    this._trayError = error;
+    // kept for diagnosis (Settings shows it too); never contains vault data
+    await (error ? this.d.kv.set(TRAY_ERROR_KEY, error) : this.d.kv.remove(TRAY_ERROR_KEY)).catch(() => undefined);
+    this.changed();
   }
 }

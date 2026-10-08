@@ -208,7 +208,7 @@ jobs:
           HELPER_LAYOUT: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 != '' && 'bundle' || 'flat' }}
         run: |
           bash apps/desktop/scripts/build.sh
-          lipo -info apps/desktop/dist/PassVault.app/Contents/MacOS/PassVault
+          lipo -info apps/desktop/dist/PassVault.app/Contents/MacOS/passvault-shell
 
       - name: Import signing certificate and notarization credentials
         if: env.SIGNING == 'true'

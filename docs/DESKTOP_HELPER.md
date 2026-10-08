@@ -52,9 +52,9 @@ Verified on 2026-10-08 against the docs and the Neutralinojs server source:
 |---|---|
 | JSON on stdin with `nlPort`, `nlToken`, `nlConnectToken`, `nlExtensionId` | **Confirmed.** All four values are **strings**: `nlPort` is `to_string(port)`. **Correction:** Neutralino closes the extension's stdin right after writing it (`stdInEnd`), so stdin EOF is normal and cannot be used to detect an orphaned helper. |
 | Connect to `ws://127.0.0.1:<nlPort>?extensionId=<id>&connectToken=<tok>` | **Confirmed.** The docs show `localhost`. The server accepts a Host of `localhost` or `127.0.0.1` (it does not check the port) and binds to 127.0.0.1. It validates the connect token and that the extension id is a loaded extension, and parses both parameters with `[\w.\-_]+`. |
-| The extension receives `{event, data}` | **Confirmed.** `extensions.dispatch` → `events::dispatchToExtension` → `{"event","data"}`. If the extension is not connected yet, the client library queues `dispatch` calls. The extension also receives framework events sent through `events::dispatch` (for example `windowClose`, `windowFocus`, `extClientConnect`) and `{id, method, data}` replies to its own native calls. The helper ignores everything except `pv.request` and `windowClose`. |
+| The extension receives `{event, data}` | **Confirmed.** `extensions.dispatch` → `events::dispatchToExtension` → `{"event","data"}`. If the extension is not connected yet, the client library queues `dispatch` calls. The extension also receives framework events sent through `events::dispatch` (for example `windowClose`, `windowFocus`, `extClientConnect`) and `{id, method, data}` replies to its own native calls. The helper acts only on `pv.request`; `windowClose` is logged and otherwise ignored, because closing the window leaves PassVault running in the menu bar. |
 | Send `{id, method:"app.broadcast", accessToken:nlToken, data:{event,data}}` | **Confirmed.** `id` is a UUIDv4. `router::executeNativeMethod` checks the access token, then API access and method permissions. **If `apps/desktop` sets `nativeAllowList`, it must include `app.broadcast`** (for the helper) and `extensions.dispatch` (for the UI). |
-| Exit on `windowClose` or socket close | **Confirmed.** Neutralino does **not** kill extensions when it exits; extensions must exit when the socket closes. `windowClose` reaches extensions (via `events::dispatch`, which also broadcasts to extensions) **only when `exitProcessOnClose` is false**. Otherwise the app exits and the socket closes. |
+| Exit on socket close (not on `windowClose`) | **Confirmed.** Neutralino does **not** kill extensions when it exits; extensions must exit when the socket closes. `windowClose` reaches extensions (via `events::dispatch`, which also broadcasts to extensions) **only when `exitProcessOnClose` is false**. Otherwise the app exits and the socket closes. |
 
 The client library is `@neutralinojs/lib` 6.x and the CLI is `neu` v11.
 Suggested config for `apps/desktop/neutralino.config.json`. Quote the path,
@@ -383,8 +383,7 @@ internal/testutil/sshtest  in-process SSH server used by tests
   is 0600, the directory 0700, the file is opened with `O_NOFOLLOW`, and it is
   rotated at 5 MiB.
 - **Exit triggers:**
-  - the WebSocket closes;
-  - `windowClose`;
+  - the WebSocket closes (the app exited; closing the window alone does not stop the helper);
   - SIGTERM, SIGINT or SIGHUP;
   - the parent pid changes or becomes 1 (checked every 2 s).
 - **On exit:**
@@ -490,8 +489,8 @@ Coverage includes:
   main-thread run loop (the real `com.apple.screenIsLocked` is never posted);
 - logs contain no secrets;
 - end-to-end against a fake Neutralino server: bootstrap, `127.0.0.1` Host,
-  `app.broadcast` with `accessToken`, exit on `windowClose` (agent socket
-  removed) and on socket close.
+  `app.broadcast` with `accessToken`, still serving after `windowClose`, exit
+  on socket close (agent socket removed).
 
 ### Universal build output
 

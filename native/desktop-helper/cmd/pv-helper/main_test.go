@@ -137,16 +137,30 @@ func TestEndToEndWindowClose(t *testing.T) {
 	if _, err := os.Lstat(sock); err != nil {
 		t.Fatal("socket missing")
 	}
-	// Unrelated framework events are ignored.
+	// Framework events do not stop the helper: closing the window leaves the
+	// app running in the menu bar, so the helper must stay available.
 	f.dispatch("windowFocus", nil)
 	f.dispatch("windowClose", nil)
+	select {
+	case code := <-done:
+		t.Fatalf("helper exited on windowClose (code %d)", code)
+	case <-time.After(500 * time.Millisecond):
+	}
+	f.dispatch("pv.request", map[string]any{"v": 1, "id": "p1", "sessionId": sid, "op": "ping", "params": map[string]any{}})
+	if r := f.response("p1"); r["ok"] != true {
+		t.Fatalf("ping after windowClose %v", r)
+	}
+	// The app exiting closes the socket; that is what stops the helper.
+	f.mu.Lock()
+	f.conn.Close(websocket.StatusNormalClosure, "app exited")
+	f.mu.Unlock()
 	select {
 	case code := <-done:
 		if code != 0 {
 			t.Fatalf("exit code %d", code)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("helper did not exit on windowClose")
+		t.Fatal("helper did not exit when the socket closed")
 	}
 	if _, err := os.Lstat(sock); !os.IsNotExist(err) {
 		t.Fatal("agent socket not removed on exit")

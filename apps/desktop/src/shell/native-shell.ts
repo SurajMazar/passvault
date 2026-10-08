@@ -1,5 +1,6 @@
 import type { NeutralinoLike } from '../neutralino';
 import type { MenuBar } from './menu-bar';
+import { nativeBridge } from './native-bridge';
 
 /**
  * macOS shell integration: main menu (needed for ⌘C/⌘V/⌘A in a WKWebView),
@@ -75,8 +76,12 @@ export class NativeShell {
 
   async install() {
     await this.nl.window.setMainMenu(MAIN_MENU).catch(() => undefined);
-    await this.menuBar.renderTray();
     void this.nl.events.on('trayMenuItemClicked', (e) => this.onMenu((e.detail as { id?: string })?.id));
+    // menu-bar item created by the shell's native bridge (scripts/pvwindow.m)
+    globalThis.addEventListener?.('pv-tray', (e) => {
+      const id = (e as CustomEvent<unknown>).detail;
+      if (typeof id === 'string') this.onMenu(id);
+    });
     void this.nl.events.on('mainMenuItemClicked', (e) => this.onMenu((e.detail as { id?: string })?.id));
     void this.nl.events.on('windowClose', () => void this.onWindowClose());
     // window.newWindowPolicy = "custom": target=_blank / window.open requests come here.
@@ -85,6 +90,8 @@ export class NativeShell {
       const url = typeof d === 'string' ? d : d?.url;
       if (url) this.deps.openLink(url);
     });
+    // last: it may wait briefly for the native bridge
+    await this.menuBar.renderTray();
   }
 
   onMenu(id: string | undefined) {
@@ -138,7 +145,7 @@ export class NativeShell {
     } finally {
       // Neutralino's app.exit tears its menu-bar item down off the main thread, which current
       // macOS aborts on. The shell's native bridge (scripts/pvwindow.m) quits the macOS way instead.
-      const bridge = (globalThis as unknown as { webkit?: { messageHandlers?: { pvNative?: { postMessage(m: unknown): void } } } }).webkit?.messageHandlers?.pvNative;
+      const bridge = nativeBridge();
       if (bridge) {
         bridge.postMessage({ cmd: 'quit' });
         await new Promise((r) => setTimeout(r, 1500)); // normally never returns: the app terminates

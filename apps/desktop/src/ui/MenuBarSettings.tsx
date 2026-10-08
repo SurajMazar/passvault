@@ -14,7 +14,7 @@ export interface LoginItemApi {
 export function MenuBarSettings({ menuBar, loginItem, capabilities }: { menuBar: MenuBar; loginItem: LoginItemApi; capabilities: { hotkey: boolean; loginItem: boolean } }) {
   useSyncExternalStore(
     (cb) => menuBar.subscribe(cb),
-    () => JSON.stringify(menuBar.settings) + (menuBar.hotKeyError ?? ''),
+    () => JSON.stringify(menuBar.settings) + (menuBar.hotKeyError ?? '') + '|' + (menuBar.trayError ?? ''),
   );
   const s = menuBar.settings;
   const [recording, setRecording] = useState(false);
@@ -108,6 +108,7 @@ export function MenuBarSettings({ menuBar, loginItem, capabilities }: { menuBar:
             <p className="mt-2 text-xs text-fg-muted">Not available while the desktop helper is not running. Use the menu-bar icon instead.</p>
           )}
           {menuBar.hotKeyError && !error && <Banner tone="warn">{menuBar.hotKeyError} — pick another combination.</Banner>}
+          {menuBar.trayError && <Banner tone="warn">The menu-bar icon could not be added ({menuBar.trayError}). Quit and reopen PassVault.</Banner>}
         </div>
 
         <AvatarPicker value={s.avatar} state={menuBar.state} onChange={(a) => menuBar.update({ avatar: a })} />

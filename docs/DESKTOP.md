@@ -17,8 +17,9 @@ and the deviations from that contract are in [DESKTOP_HELPER.md](./DESKTOP_HELPE
 
 ```
 PassVault.app/Contents
-├── MacOS/PassVault          launcher (C): execv → passvault-shell --path=<…>/Contents/Resources
-├── MacOS/passvault-shell    Neutralinojs binary (WKWebView window + local HTTP/WebSocket server on 127.0.0.1:47391)
+├── MacOS/passvault-shell    the app executable: Neutralinojs binary (WKWebView window + local HTTP/WebSocket server on 127.0.0.1:47391)
+├── MacOS/libpvwindow.dylib  buddy panel, menu-bar item and quit bridge (scripts/pvwindow.m)
+├── MacOS/resources.neu      symlink → ../Resources/resources.neu (Neutralino looks next to its binary)
 ├── MacOS/pv-helper          Go helper, started by Neutralino as extension io.passvault.helper
 │   (or Helpers/PassVault Helper.app/Contents/MacOS/pv-helper with HELPER_LAYOUT=bundle)
 ├── Resources/resources.neu  bundled UI (resources/app) + neutralino.config.json + icons
@@ -270,7 +271,7 @@ pnpm --filter @passvault/desktop package       # scripts/build.sh → dist/*.app
 2. `tsc` and `vite build --mode production` (URLs from the environment or the gitignored `.env.production`; see “Servers” below).
 3. `neu build` in a staging directory. Before it runs, the script checks that the inspector is off and `exportAuthInfo` is false, and sets the helper path.
 4. `make -C native/desktop-helper universal`.
-5. Builds the universal C launcher, and the `.icns` with `sips` and `iconutil` from `assets/icon-1024.png`. The icons come from `scripts/gen-icons.mjs`, which uses no external tools.
+5. Builds `libpvwindow.dylib` and links it into the shell, and builds the `.icns` with `sips` and `iconutil` from `assets/icon-1024.png`. The icons come from `scripts/gen-icons.mjs`, which uses no external tools.
 6. Assembles, ad-hoc signs (`codesign --force --sign -`, inner code first) and verifies `dist/PassVault.app` (universal), `dist/arm64/PassVault.app` and `dist/x64/PassVault.app`.
 
 Options:
@@ -392,7 +393,7 @@ Two-terminal alternative: run `pnpm --filter @passvault/desktop dev:ui` in one t
 
 | Bundle | Binaries |
 |---|---|
-| `dist/PassVault.app` | universal (x86_64 + arm64): launcher, `passvault-shell` (Neutralino's `neutralino-mac_universal`), `pv-helper` (lipo) |
+| `dist/PassVault.app` | universal (x86_64 + arm64): `passvault-shell` (Neutralino's `neutralino-mac_universal`), `pv-helper` (lipo) |
 | `dist/arm64/PassVault.app` | arm64 only |
 | `dist/x64/PassVault.app` | x86_64 only |
 
