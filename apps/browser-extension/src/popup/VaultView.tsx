@@ -37,12 +37,13 @@ import { ServerSettings } from './ServerSwitch';
 import { Generator } from './Generator';
 import { activeTabId, call, copyToClipboard, errorText } from './rpc';
 import { SaveLogin } from './SaveLogin';
-import { isMac, TouchIdSettings } from './TouchIdSettings';
+import { isMac, touchIdContinuing, TouchIdSettings } from './TouchIdSettings';
 
 type Route = { view: 'list' } | { view: 'detail'; id: string } | { view: 'save' };
 
 export function VaultView({ state }: { state: PopupState }) {
-  const [tab, setTab] = useState<'vault' | 'generator' | 'settings'>('vault');
+  // Back on Settings after the popup reloaded itself to finish turning on Touch ID.
+  const [tab, setTab] = useState<'vault' | 'generator' | 'settings'>(() => (touchIdContinuing() ? 'settings' : 'vault'));
   const [route, setRoute] = useState<Route>({ view: 'list' });
   const [tabId, setTabId] = useState<number | null>(null);
   useEffect(() => {

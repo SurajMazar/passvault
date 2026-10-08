@@ -7,7 +7,7 @@
  */
 import { VaultSession } from '@passvault/vault-core';
 import { PRODUCTION_API_URL, PRODUCTION_WEB_URL } from '../shared/config';
-import { OFFSCREEN_TARGET, POPUP_PORT, type PortMessageToPopup } from '../shared/protocol';
+import { OFFSCREEN_TARGET, POPUP_PORT, type PortMessageToBackground, type PortMessageToPopup } from '../shared/protocol';
 import type { ChromeLike } from './chrome-api';
 import { BackgroundController } from './controller';
 import { createLogger } from './log';
@@ -34,7 +34,7 @@ interface Runtime {
 function boot(server: string, servers: ServerManager): Runtime {
   const scope = serverScope(server);
   const webUrl = webUrlFor(server, PRODUCTION_API_URL, PRODUCTION_WEB_URL);
-  const platform = createExtensionPlatform(c, { apiBaseUrl: server, webAppUrl: webUrl, scope });
+  const platform = createExtensionPlatform(c, { apiBaseUrl: server, webAppUrl: webUrl, scope, nativeRelay: relayFromPopup });
   const session = new VaultSession(platform);
   // Never offer to save passwords typed into PassVault's own pages.
   const own = [...new Set([new URL(webUrl).origin, new URL(server).origin])];
@@ -91,8 +91,34 @@ let current: Promise<Runtime> = (async () => {
 /** Open popup ports and their state subscriptions (re-attached on a server switch). */
 const ports = new Map<chrome.runtime.Port, () => void>();
 
+/** Touch ID host calls made by the open popup on the worker's behalf (background/touch-id.ts). */
+const nativeCalls = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+let nativeSeq = 0;
+function relayFromPopup(message: Record<string, unknown>): Promise<unknown> {
+  const port = [...ports.keys()].at(-1);
+  if (!port) return Promise.reject(new Error('Open the PassVault popup to use Touch ID.'));
+  const id = ++nativeSeq;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      nativeCalls.delete(id);
+      reject(new Error('Touch ID timed out'));
+    }, 120_000);
+    nativeCalls.set(id, {
+      resolve: (v) => (clearTimeout(timer), resolve(v)),
+      reject: (e) => (clearTimeout(timer), reject(e)),
+    });
+    try {
+      port.postMessage({ type: 'native', id, message } satisfies PortMessageToPopup);
+    } catch {
+      nativeCalls.delete(id);
+      clearTimeout(timer);
+      reject(new Error('Open the PassVault popup to use Touch ID.'));
+    }
+  });
+}
+
 function attach(port: chrome.runtime.Port, rt: Runtime): () => void {
-  const send = (state: PortMessageToPopup['state']) => {
+  const send = (state: Extract<PortMessageToPopup, { type: 'state' }>['state']) => {
     try {
       port.postMessage({ type: 'state', state } satisfies PortMessageToPopup);
     } catch {
@@ -130,8 +156,14 @@ chrome.runtime.onConnect.addListener((port) => {
     ports.get(port)?.();
     ports.delete(port);
   });
-  port.onMessage.addListener(() => {
-    /* keepalive only; not counted as user activity */
+  port.onMessage.addListener((m: PortMessageToBackground) => {
+    // keepalives are not counted as user activity; replies finish relayed Touch ID calls
+    if (m?.type !== 'native.reply' || typeof m.id !== 'number') return;
+    const pending = nativeCalls.get(m.id);
+    if (!pending) return;
+    nativeCalls.delete(m.id);
+    if (m.ok) pending.resolve(m.reply);
+    else pending.reject(new Error(m.error || 'Touch ID failed'));
   });
   void current.then((rt) => {
     if (!closed) ports.set(port, attach(port, rt));

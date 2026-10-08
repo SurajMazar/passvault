@@ -1,7 +1,7 @@
 import { IndexedDbStore, type CacheStore } from '@passvault/sync';
 import type { Platform } from '@passvault/vault-core';
 import type { ChromeLike } from './chrome-api';
-import { createTouchIdAdapter } from './touch-id';
+import { createTouchIdAdapter, type NativeRelay } from './touch-id';
 
 /** Keys used before per-server storage (and by tests that pass no scope). */
 export const LEGACY_TOKEN_KEY = 'pv.sessionToken';
@@ -25,7 +25,7 @@ export const prefPrefix = (scope?: string) => (scope ? `pv.${scope}.pref.` : LEG
  */
 export function createExtensionPlatform(
   c: ChromeLike,
-  opts: { apiBaseUrl: string; webAppUrl: string; scope?: string; createCacheStore?: (scope: string) => CacheStore; deviceName?: string },
+  opts: { apiBaseUrl: string; webAppUrl: string; scope?: string; createCacheStore?: (scope: string) => CacheStore; deviceName?: string; nativeRelay?: NativeRelay },
 ): Platform {
   const local = c.storage.local;
   const getStr = async (k: string) => {
@@ -77,7 +77,7 @@ export function createExtensionPlatform(
       if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('Only web links can be opened');
       await c.tabs.create({ url: u.toString() });
     },
-    biometrics: createTouchIdAdapter(c, opts.scope),
+    biometrics: createTouchIdAdapter(c, opts.scope, opts.nativeRelay),
   };
 }
 

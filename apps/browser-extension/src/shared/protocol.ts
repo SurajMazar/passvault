@@ -317,7 +317,10 @@ export interface AutoSaveStatus {
 export type RequestOf<T extends RequestType> = Extract<Request, { type: T }>;
 
 
-export type PortMessageToPopup = { type: 'state'; state: PopupState };
-export type PortMessageToBackground = { type: 'keepalive' };
+export type PortMessageToPopup =
+  | { type: 'state'; state: PopupState }
+  /** Touch ID host call the worker cannot make itself (see background/touch-id.ts) */
+  | { type: 'native'; id: number; message: Record<string, unknown> };
+export type PortMessageToBackground = { type: 'keepalive' } | { type: 'native.reply'; id: number; ok: boolean; reply?: unknown; error?: string };
 
 export type OffscreenMessage = { target: typeof OFFSCREEN_TARGET; type: 'clipboard.clear' };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { POPUP_PORT } from '../shared/constants';
-import type { ErrorCode, PopupState, PortMessageToPopup, RequestOf, RequestType, ResponseMap, Result } from '../shared/protocol';
+import { POPUP_PORT, TOUCH_ID_HOST } from '../shared/constants';
+import type { ErrorCode, PopupState, PortMessageToBackground, PortMessageToPopup, RequestOf, RequestType, ResponseMap, Result } from '../shared/protocol';
 
 export class RpcError extends Error {
   constructor(
@@ -43,6 +43,8 @@ export function usePopupState(): { state: PopupState | null; error: string | nul
         if (m?.type === 'state') {
           failures = 0;
           setState(m.state);
+        } else if (m?.type === 'native') {
+          void relayNative(port, m.id, m.message);
         }
       });
       // If the worker restarts, reconnect (it resumes from chrome.storage.session if unlocked).
@@ -75,6 +77,27 @@ export function usePopupState(): { state: PopupState | null; error: string | nul
     };
   }, []);
   return { state, error };
+}
+
+/**
+ * Touch ID host call for a worker that started before the "nativeMessaging" permission
+ * was granted (background/touch-id.ts). Only PassVault's own host can be reached.
+ */
+async function relayNative(port: chrome.runtime.Port | null, id: number, message: Record<string, unknown>) {
+  const reply = (r: PortMessageToBackground) => {
+    try {
+      port?.postMessage(r);
+    } catch {
+      /* popup closing */
+    }
+  };
+  const send = (chrome.runtime as { sendNativeMessage?: (app: string, msg: object) => Promise<unknown> }).sendNativeMessage;
+  if (!send) return reply({ type: 'native.reply', id, ok: false, error: 'Reopen PassVault to finish turning on Touch ID.' });
+  try {
+    reply({ type: 'native.reply', id, ok: true, reply: await send.call(chrome.runtime, TOUCH_ID_HOST, message) });
+  } catch (e) {
+    reply({ type: 'native.reply', id, ok: false, error: e instanceof Error ? e.message : 'Touch ID host not reachable' });
+  }
 }
 
 /** Copy from the popup (it has the user gesture); secrets get a background-scheduled clear. */
