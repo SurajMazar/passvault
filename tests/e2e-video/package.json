@@ -11,7 +11,8 @@
     "tour:tts": "tsx src/tour/tts.ts",
     "tour:record": "tsx src/tour/record.ts",
     "check:server-switch": "tsx src/server-switch-check.ts",
-    "check:save-prompt-extension": "tsx src/save-prompt-extension-check.ts"
+    "check:save-prompt-extension": "tsx src/save-prompt-extension-check.ts",
+    "store-assets": "tsx src/store-assets.ts"
   },
   "devDependencies": {
     "@passvault/sync": "workspace:*",

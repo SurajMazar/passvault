@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Privacy Policy · PassVault</title>
+<meta name="description" content="How PassVault, its web app, macOS app and Chrome extension handle your data.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/pages.css">
+</head>
+<body>
+<main>
+<header><img src="/favicon.svg" alt=""><a href="/">PassVault</a></header>
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated {{UPDATED}}</p>
+
+<div class="card"><p><strong>In short:</strong> PassVault is end-to-end encrypted. Your passwords, notes and other vault items are encrypted on your device with a key derived from your master password before anything is sent to the server. The server stores only that encrypted data and cannot read it. We do not sell data, show ads, or use analytics or tracking.</p></div>
+
+<p>This policy covers the PassVault web app, the PassVault macOS app and the PassVault Chrome extension (together, “PassVault”) when used with this server. If you connect an app or the extension to a different PassVault server, that server's operator handles your data instead.</p>
+
+<h2>What is stored on the server</h2>
+<ul>
+<li><strong>Account details:</strong> your email address and the name you give when you register.</li>
+<li><strong>Encrypted vault data:</strong> your vault items, settings, and the keys that protect them, all encrypted on your device. The server cannot decrypt them.</li>
+<li><strong>Sign-in data:</strong> a hash derived from your master password (never the password itself), hashed recovery codes, and your two-factor (TOTP) secret, stored encrypted.</li>
+<li><strong>Devices and sessions:</strong> a device name you can see in your account (for example “Chrome on macOS”), the browser's user-agent string, sign-in times, and a <em>shortened</em> IP address (the last part is removed, e.g. 203.0.113.0/24). This is used to show you your active sessions and to protect your account.</li>
+<li><strong>Security events:</strong> a log of account events such as sign-ins, password changes and sharing changes, with a shortened IP address. It never contains passwords or vault contents.</li>
+</ul>
+<p>Your master password never leaves your device. If you forget it and have lost your recovery codes, nobody — including us — can recover your vault.</p>
+
+<h2>Email</h2>
+<p>We send email only for account purposes: registration codes, account-recovery links and security notices. No newsletters or marketing.</p>
+
+<h2>What the Chrome extension does</h2>
+<ul>
+<li>It talks only to your PassVault server. It does not send data to any other service.</li>
+<li>By default it has access only to your PassVault server and to the tab you click it on.</li>
+<li><strong>Suggestions in login fields</strong> and <strong>Offer to save passwords</strong> are optional. They need Chrome's permission to read pages on all sites, and you can turn them off at any time in the extension's settings. When on, the extension looks for login forms on the pages you visit. Suggestions show only the titles and usernames of your logins for that site; a password is filled only into the site it was saved for, after you click it.</li>
+<li>When you sign in to a website, the extension may keep the username and password you typed in memory for up to 3 minutes so it can offer to save them. They stay inside the extension, are never shown to the page, and are discarded after 3 minutes, when you dismiss the offer, or when the vault locks. Saved logins are encrypted before they are sent to the server.</li>
+<li>The extension does not record your browsing history, page contents, or what you type in other fields.</li>
+</ul>
+
+<h2>Data on your devices</h2>
+<p>The apps keep an encrypted copy of your vault on your device so it works offline, plus your session token and preferences. Copied passwords are cleared from the clipboard automatically after a short time.</p>
+
+<h2>Sharing</h2>
+<p>We do not sell, rent or share your data with third parties. Your data is stored on a server we operate. We would only disclose the data we hold if required by law — and the vault contents would remain encrypted and unreadable to us.</p>
+
+<h2>Retention and deletion</h2>
+<p>Expired and revoked sessions, used email links and unfinished registrations are deleted automatically within about a day. Your account data stays until you ask us to delete it; we then delete your account and its vault data.</p>
+
+<h2>Security</h2>
+<p>All traffic uses HTTPS. Vault data is encrypted end to end with modern, audited cryptography (libsodium), and sign-in can be protected with two-factor authentication.</p>
+
+<h2>Children</h2>
+<p>PassVault is not directed at children under 13.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, we will update this page and the date at the top.</p>
+
+<h2>Contact</h2>
+{{CONTACT_PRIVACY}}
+
+<footer><a href="/">Open PassVault</a><a href="/support">Support</a></footer>
+</main>
+</body>
+</html>

@@ -37,7 +37,7 @@
 		header @assets Cache-Control "public, max-age=31536000, immutable"
 		@html path / /index.html /recover
 		header @html Cache-Control "no-cache"
-		try_files {path} /index.html
+		try_files {path} {path}/index.html /index.html
 		file_server
 	}
 }

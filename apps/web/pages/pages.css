@@ -1,0 +1,27 @@
+/* Public information pages (/privacy, /support). Static: no scripts. */
+:root {
+  --bg: #f7f8fa; --fg: #111827; --muted: #4b5563; --card: #ffffff; --line: #e5e7eb; --accent: #0f766e;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0b1117; --fg: #e5e7eb; --muted: #9ca3af; --card: #111827; --line: #1f2937; --accent: #2dd4bf; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+header { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+header img { width: 32px; height: 32px; }
+header a { color: var(--fg); text-decoration: none; font-weight: 700; font-size: 18px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+h2 { font-size: 19px; margin: 32px 0 8px; }
+h3 { font-size: 16px; margin: 22px 0 4px; }
+code { font-size: 14px; }
+p, li { color: var(--muted); }
+strong { color: var(--fg); }
+a { color: var(--accent); }
+ul { padding-left: 20px; }
+.updated { font-size: 14px; color: var(--muted); margin: 0 0 24px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin: 20px 0; }
+.card p { margin: 0; }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+footer a { margin-right: 16px; }
