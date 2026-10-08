@@ -152,6 +152,11 @@ git tag v0.2.0 && git push origin v0.2.0          # publishes the macOS app / ex
 
 Only `main` deploys: pushes to other branches and pull requests run the checks
 (`ci.yml`) but never deploy, and a manual Deploy run on another branch is refused.
+A push deploys only when it changes what the server is built from (`apps/api`,
+`apps/web`, `packages/`, `deploy/`, the lockfile and workspace files, or the Deploy
+and Checks workflows). Changes only to the macOS app, the browser extension, the
+native helper or docs ship through releases and leave the server alone; use
+**Actions → Deploy → Run workflow** to redeploy without a code change.
 
 Both workflows first run **Checks** (`checks.yml`: ESLint, typecheck, unit tests,
 API end-to-end tests on PostgreSQL, builds, dependency audit, Go vet/gofmt/race

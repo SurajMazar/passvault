@@ -3,7 +3,7 @@ name: Deploy
 # Deploys the API (container image) and the web dashboard to the production
 # server (docs/DEPLOYMENT.md → "Shared host with nginx + PostgreSQL").
 #
-#   git push origin main                           # every push to main deploys (after the checks pass)
+#   git push origin main                           # a push to main that changes the server's code deploys (after the checks pass)
 #   or: Actions → Deploy → Run workflow on main    # redeploy (e.g. after changing SMTP/DB secrets)
 # Only the main branch can deploy: other branches and tags never do.
 #
@@ -40,6 +40,19 @@ name: Deploy
 on:
   push:
     branches: [main]
+    # Only what the server is built from: the Mac app, the browser extension, the
+    # native helper and docs ship through the Release workflow, never here.
+    paths:
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'deploy/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.nvmrc'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/checks.yml'
   workflow_dispatch:
 
 permissions:
