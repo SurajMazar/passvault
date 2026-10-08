@@ -143,13 +143,21 @@ jobs:
       - name: Package
         run: |
           pnpm --filter @passvault/browser-extension zip
-          mkdir -p out
-          cp apps/browser-extension/passvault-extension-*.zip out/
+          mkdir -p out/install out/store
+          cp apps/browser-extension/passvault-extension-*-chrome-web-store.zip out/store/
+          rm apps/browser-extension/passvault-extension-*-chrome-web-store.zip
+          cp apps/browser-extension/passvault-extension-*.zip out/install/
+      # Uploaded as-is (no wrapper zip): the run page offers the file itself, never a zip inside a zip.
+      # archive: false takes a single file, so each zip is its own artifact.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          # Uploaded as-is (no wrapper zip): the run page offers the file itself, never a zip inside a zip.
           archive: false
-          path: out/*.zip
+          path: out/install/*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          archive: false
+          path: out/store/*.zip
           if-no-files-found: error
       - name: Publish to the Chrome Web Store (when credentials are configured)
         env:
@@ -167,7 +175,7 @@ jobs:
             -d refresh_token="$CWS_REFRESH_TOKEN" -d grant_type=refresh_token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
           echo "::add-mask::$token"
           curl -fsS -X PUT -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" \
-            -T out/passvault-extension-*-chrome-web-store.zip \
+            -T out/store/passvault-extension-*-chrome-web-store.zip \
             "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$CWS_EXTENSION_ID" | tee upload.json
           node -e 'const r=require("./upload.json"); if (r.uploadState !== "SUCCESS") { console.error(r); process.exit(1) }'
           curl -fsS -X POST -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" -H "Content-Length: 0" \
