@@ -9,6 +9,7 @@ import { buildLoggerParams } from './logging/logger';
 import { STRICT_RATE_LIMIT } from './common/decorators';
 import { ApiExceptionFilter } from './common/exception.filter';
 import { EmailLimiter } from './common/email-limiter.service';
+import { UnknownAccountLockout } from './auth/unknown-account-lockout.service';
 import { PrismaService } from './prisma/prisma.service';
 import { MailService } from './mail/mail.service';
 import { PasswordHasher } from './security/password-hasher.service';
@@ -80,6 +81,7 @@ export class AppModule {
         PasswordHasher,
         SecretsService,
         EmailLimiter,
+        UnknownAccountLockout,
         AuditService,
         SessionService,
         MfaService,

@@ -10,7 +10,7 @@ describe('external links', () => {
       expect(parseSafeExternalUrl(bad)).toBeNull();
   });
 
-  it('percent-encodes shell-special characters before os.open (which runs `open "<url>"` via sh)', () => {
+  it('percent-encodes shell-special characters (defence in depth; the helper opens links without a shell)', () => {
     const u = parseSafeExternalUrl('https://example.com/p?q=$(id)&r=`whoami`&s="x"&t=\\y')!;
     const s = shellSafeUrl(u);
     expect(s).not.toMatch(/[$`"\\]/);

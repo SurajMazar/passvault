@@ -38,7 +38,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 }
 
 export async function lockSeq(tx: Tx): Promise<void> {
-  await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${SEQ_LOCK_KEY})`);
+  // Parameterized (no string-built SQL anywhere in the API; checked by the security harness).
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BigInt(SEQ_LOCK_KEY)})`;
 }
 
 /** Draw the next global change sequence number (call only after lockSeq in the same tx). */

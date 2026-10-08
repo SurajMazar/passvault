@@ -14,12 +14,19 @@ unit-tested where possible, but the real-world path could not be run here;
 | `packages/env-parser` (6 000 random + 4 000 env-shaped + 1 000 UTF-16 round trips, 2 500 random edits) | 65 / 65 |
 | `packages/sync` (offline queue, idempotent replay, conflicts, tombstones, access loss, mid-run enqueue) | 9 / 9 |
 | `packages/vault-core` (offline unlock, lock wipes keys/plaintext, inactivity lock, URL matching incl. private suffixes, site keys, local search excludes secrets, insights) | 15 / 15 |
-| `apps/api` e2e on real PostgreSQL (registration with code, MFA + replay, recovery codes, cross-user authz, roles, expiry, revision conflicts, idempotency, tombstones, sync paging, rotation, sessions, reauth, recovery, log redaction) | 35 / 35 |
+| `apps/api` e2e on real PostgreSQL (registration with code, MFA + replay, recovery codes, cross-user authz, roles, expiry, revision conflicts, idempotency, tombstones, sync paging, rotation, sessions, reauth, recovery, log redaction; security: lockout without enumeration, every expiry window with a fake clock) | 41 / 41 |
 | `apps/browser-extension` (message/sender validation, origin matching, injected fill in jsdom, lock/resume, no secrets in logs, manifest permissions, opt-in save prompt with optional notes: sender/origin checks, locked flow, update vs save, notes saved/appended/limited, redirects, never list, TTL/wipe-on-lock, untrusted events ignored, closed shadow root; server switching: URL validation, per-server storage namespaces, legacy migration, popup-only `server.set`) | 61 / 61 |
 | `apps/desktop` (IPC client, hop building, host-key trust, paste guard, link handler, lock hook, clipboard, storage keys, Keychain token, server selection & isolation) | 62 / 62 |
 | `native/desktop-helper` Go, `-race` (host-key accept/mismatch, jump hosts, password/key/keyboard-interactive auth, PTY resize, disconnect cleanup, agent lock/approval/forwarding, IPC validation, no secrets in logs/argv, 0600 exports) | all packages pass (52 tests) |
 | `tests/acceptance` — 12 multi-user/multi-device scenarios against the Podman stack **and** through the production TLS edge | 12 / 12 (both) |
 | Walkthrough video (`tests/e2e-video`) — Playwright drives the real UI against the real API | recorded, 120 s |
+
+**Security verification harness** (`tests/security`, [security/HARNESS.md](security/HARNESS.md)):
+13 suites, ~275 checks against a disposable stack, real browsers, the Go helper
+and the packaged desktop app. Latest results: [security/REPORT.md](security/REPORT.md);
+findings PV-SEC-001…006 in [security/FINDINGS.md](security/FINDINGS.md) (4 fixed,
+1 accepted design risk, 1 open privacy decision); open and unverified items in
+[security/RESIDUAL_RISKS.md](security/RESIDUAL_RISKS.md).
 
 ## Implemented and verified
 

@@ -9,7 +9,7 @@ import { installPasteGuard, type PasteAnalysis } from './paste-guard';
  * views. Safety settings:
  *  - no clipboard addon (OSC 52 clipboard access is not possible)
  *  - allowProposedApi: false
- *  - links (plain URLs and OSC 8 hyperlinks) only via a confirm dialog → os.open, http(s) only
+ *  - links (plain URLs and OSC 8 hyperlinks) only via a confirm dialog → helper link.open (no shell), http(s) only
  *  - multi-line / control-character pastes need confirmation
  *  - terminal output is untrusted: it is written to xterm only, never logged or stored
  */

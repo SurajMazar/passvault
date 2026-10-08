@@ -1,13 +1,14 @@
 /**
- * External links. Only http(s) URLs are ever handed to the OS (`os.open`), and
- * only after the user confirmed the exact URL. Anything else (file:, javascript:,
- * custom schemes such as x-apple.systempreferences:, ssh:, …) is refused.
+ * External links. Only http(s) URLs are ever opened, and only after the user
+ * confirmed the exact URL. Anything else (file:, javascript:, custom schemes
+ * such as x-apple.systempreferences:, ssh:, …) is refused.
  *
- * Neutralino's `os.open` on macOS runs `open "<url>"` through /bin/sh, so the
- * URL handed to it must not contain characters that are special inside double
- * quotes (`$`, backtick, `"`, `\`). WHATWG URL serialisation leaves `$` and
- * backticks in queries unencoded, so every character outside a conservative
- * URL-safe set is percent-encoded before calling os.open.
+ * The helper opens the link (`link.open`: validated again in Go, launched as
+ * `/usr/bin/open <url>` with an argv list, no shell). Neutralino's `os.open`
+ * is NOT on the native allowlist: it runs `open "<url>"` through /bin/sh, so
+ * any script in the webview could have turned it into a shell command
+ * (finding PV-SEC-002). Characters outside a conservative URL-safe set are
+ * still percent-encoded (defence in depth).
  */
 
 const SHELL_SAFE_URL_CHAR = /[A-Za-z0-9\-._~:/?#[\]@!&'()*+,;=%]/;

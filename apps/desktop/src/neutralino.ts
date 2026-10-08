@@ -25,7 +25,6 @@ export interface NeutralinoLike {
   os: {
     showOpenDialog(title?: string, options?: { filters?: Array<{ name: string; extensions: string[] }>; multiSelections?: boolean; defaultPath?: string }): Promise<string[]>;
     showSaveDialog(title?: string, options?: { filters?: Array<{ name: string; extensions: string[] }>; defaultPath?: string; forceOverwrite?: boolean }): Promise<string>;
-    open(url: string): Promise<unknown>;
     setTray(options: { icon: string; menuItems: Array<{ id?: string; text: string; isDisabled?: boolean; isChecked?: boolean }> }): Promise<unknown>;
   };
   storage: {
@@ -37,7 +36,6 @@ export interface NeutralinoLike {
     readText(): Promise<string>;
     writeText(text: string): Promise<unknown>;
   };
-  computer: { getOSInfo(): Promise<{ name: string; version: string; description?: string }> };
 }
 
 export function helperTransport(nl: NeutralinoLike, isConnected: () => boolean): HelperTransport {

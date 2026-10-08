@@ -1,0 +1,12 @@
+{
+  "$comment": "Failing harness checks that are accepted for a limited time. Every entry needs an owner, an expiry (YYYY-MM-DD) and a rationale; an expired entry makes the check blocking again. See docs/security/RESIDUAL_RISKS.md.",
+  "risks": [
+    {
+      "id": "AR-1",
+      "checks": ["crypto.rollback-detection"],
+      "owner": "maintainer (@SurajMazar)",
+      "expires": "2027-01-31",
+      "rationale": "PV-SEC-004: clients cannot detect a server replaying an older revision of a record. Fixing it needs a protocol change (authenticated revision numbers bound into the payload AAD plus per-device high-water marks, or a signed per-vault change log) that requires specialist cryptographic review. Impact limited to a malicious/compromised server; data stays confidential."
+    }
+  ]
+}

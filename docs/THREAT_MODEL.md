@@ -3,7 +3,11 @@
 Scope: PassVault server, web dashboard, browser extension, macOS desktop app
 and native helper. Method: assets → trust boundaries → adversaries → threats
 (STRIDE-style) → mitigations → residual risk. Status of each mitigation is
-tracked in [STATUS.md](STATUS.md).
+tracked in [STATUS.md](STATUS.md); the automated evidence for each threat is
+produced by the security harness ([security/HARNESS.md](security/HARNESS.md),
+latest results in [security/REPORT.md](security/REPORT.md)). Confirmed issues
+are in [security/FINDINGS.md](security/FINDINGS.md); what remains open or
+unverified is in [security/RESIDUAL_RISKS.md](security/RESIDUAL_RISKS.md).
 
 ## Assets
 
@@ -48,6 +52,17 @@ tracked in [STATUS.md](STATUS.md).
 - **A7 Device thief** — has the disk/locked device.
 - **A8 Removed collaborator** — previously had legitimate access.
 - **A9 Mailbox attacker** — controls the user's email.
+- **A10 Malicious sharing recipient** — a legitimate member who tries to keep,
+  widen or abuse access (reshare, escalate, write as a viewer).
+- **A11 Compromised client** — malicious code running inside an *unlocked*
+  client (XSS, a malicious browser extension, a tampered build). Client-side
+  encryption does **not** protect against this: such code sees what the user
+  sees. Mitigations only limit how far it can reach (CSP, minimal native
+  allowlist, helper-side validation).
+- **A12 Compromised dependency or release channel** — malicious npm/Go module,
+  hijacked GitHub Action, tampered release artifact.
+- **A13 Stale or offline client** — a device that missed revocations, key
+  rotations or deletions and syncs later.
 
 ## Threats and mitigations
 
@@ -79,6 +94,27 @@ tracked in [STATUS.md](STATUS.md).
 | T24 | Sync data loss | Optimistic concurrency, idempotent mutations, conflict UI, tombstones, encrypted version history | Server can withhold or delete |
 | T25 | Logs/analytics leak | Redacted structured logs; no analytics/session replay/crash reporting SDKs in any client | — |
 | T26 | Malicious update | Desktop: signed + notarized artifacts, no auto-download of code; extension: store-signed; web: operator-served (T4) | Supply-chain compromise of dependencies |
+| T27 | A11 turns the desktop webview into native code execution | Minimal Neutralino allowlist (no `os.open`, exec, filesystem or env APIs); links opened by the helper with an argv list after validation; strict CSP; one-time webview token | A same-user process that requests the webview globals before the webview does could obtain the token (startup race) — see RESIDUAL_RISKS |
+| T28 | A3/A9 enumerate which emails have accounts | Identical answers for unknown/known emails at register/start, prelogin (deterministic fake KDF), login, recovery/start, **and lockout** (unknown emails follow the same lockout progression in memory) | Accounts created with non-default KDF parameters are distinguishable via prelogin; per-replica in-memory state |
+| T29 | A12 hijacks CI/CD | Actions pinned to commit SHAs; read-only default token; no `pull_request_target`; release secrets only in tag/manual jobs; audit fails CI on high/critical; gitleaks, govulncheck and SBOM in CI | Compromise of a pinned action's own dependencies; maintainer account takeover upstream |
+| T30 | A13 reintroduces revoked or deleted data | Server authorizes every write against current membership (stale outbox entries are refused); tombstones block re-creation of deleted ids; sync drops vaults the user lost access to; idempotent mutation ids are per user | A server that *withholds* revocations or deletions cannot be detected by clients (no signed revision log) |
+
+
+## Verification map (security harness)
+
+| Threats | Harness checks (tests/security) |
+|---|---|
+| T1, T2, T3, T11 | `crypto.*` (independent-implementation cross-checks, tampering, context binding, grant verification), `share.*`, `leak.*` |
+| T2 rollback | `crypto.rollback-detection` — fails by design (finding PV-SEC-004, accepted risk AR-1) |
+| T6, T7, T8, T9, T28 | `auth.*`, `auth.time-dependent` (in-process API with a fake clock) |
+| T10, A10 | `authz.*` permission matrix (7 roles × 13 operations), id substitution, mass assignment, revocation race |
+| T12, T13, T14 | `ext.*` (unit tests, real-Chromium fill/capture on lookalike/iframe/honeypot pages, page isolation, save prompt, server switching) |
+| T15, T16, T17, T18, T19 | `ssh.*` (Go tests with controlled host keys, hostile terminal output in a real browser engine), `native.*` |
+| T20, T21, T27 | `desktop.*` (allowlist, CSP, runtime process arguments, one-time token, websocket without token), `native.keychain.*` |
+| T22, T25 | `leak.*` (canaries in traffic, database dump, debug logs, mail, client caches, web storage after lock) |
+| T23 | `web.xss.stored` (payloads in every item field rendered in Chromium) |
+| T24, T30 | `sync.*` |
+| T26, T29 | `sc.*` (audit, secrets in files/history/artifacts, inventory, CI least privilege, pinning, containers, release authenticity) |
 
 ## Explicit non-goals
 

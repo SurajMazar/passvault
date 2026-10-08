@@ -28,14 +28,10 @@
     "app.broadcast",
     "window.show",
     "window.focus",
-    "window.hide",
-    "window.isVisible",
     "window.unminimize",
     "window.setMainMenu",
     "os.showOpenDialog",
     "os.showSaveDialog",
-    "os.showMessageBox",
-    "os.open",
     "os.setTray",
     "extensions.dispatch",
     "extensions.getStats",
@@ -43,8 +39,7 @@
     "storage.setData",
     "storage.removeData",
     "clipboard.readText",
-    "clipboard.writeText",
-    "computer.getOSInfo"
+    "clipboard.writeText"
   ],
   "modes": {
     "window": {

@@ -65,7 +65,7 @@ const controller = new DesktopController(
 
 const confirmLink = (o: { title: string; body: string; url: string; confirmLabel: string }) => controller.confirm(o);
 const openLink = (url: string) => {
-  openExternalConfirmed(url, { confirm: confirmLink, open: (u) => nl.os.open(u) }).catch((e) => controller.notify(e instanceof Error ? e.message : String(e), 'error'));
+  openExternalConfirmed(url, { confirm: confirmLink, open: (u) => helper.request('link.open', { url: u }) }).catch((e) => controller.notify(e instanceof Error ? e.message : String(e), 'error'));
 };
 
 const xterm = new XtermHost(controller, {

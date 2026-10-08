@@ -67,6 +67,7 @@ Error codes: `bad_request`, `unknown_op`, `invalid_session`, `not_found`,
 | `agent.removeKey` | `{ keyId }` | `{}` | |
 | `agent.signDecision` | `{ requestId, decision: 'deny'\|'once'\|'timed', minutes? }` | `{}` | `timed` ≤ 60 minutes, per key |
 | `term.openExternal` | `{ app: 'terminal'\|'iterm', target: HopPublic, jump?: HopPublic, trustedHostKeys: HostKey[], useAgent }` | `{}` | writes a 0700 `.command` script containing only validated, shell-quoted, non-secret arguments and a per-connection `known_hosts` file; never passwords |
+| `link.open` | `{ url }` | `{}` | http/https with a host only, no credentials/whitespace/control characters; launches `/usr/bin/open <url>` with an argv list (no shell). Replaces Neutralino `os.open` (PV-SEC-002) |
 | `fs.writeExport` | `{ path, contentB64, overwrite }` | `{ path, mode: '0600' }` | absolute path, regular file, `O_NOFOLLOW`; refuses to replace unless `overwrite` |
 | `fs.readImport` | `{ path, maxBytes }` | `{ contentB64, size }` | regular files ≤ 5 MiB |
 

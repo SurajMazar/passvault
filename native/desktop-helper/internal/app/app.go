@@ -13,6 +13,7 @@ import (
 	"github.com/passvault/desktop-helper/internal/fsops"
 	"github.com/passvault/desktop-helper/internal/ipc"
 	"github.com/passvault/desktop-helper/internal/keychain"
+	"github.com/passvault/desktop-helper/internal/links"
 	"github.com/passvault/desktop-helper/internal/logx"
 	"github.com/passvault/desktop-helper/internal/sshconn"
 	"github.com/passvault/desktop-helper/internal/sshkeys"
@@ -27,6 +28,7 @@ type Config struct {
 	AgentDir string // "" → agentsrv.DefaultDir()
 	SSH      sshconn.Config
 	Opener   *term.Opener
+	Links    *links.Opener
 	Log      *logx.Logger
 }
 
@@ -36,6 +38,7 @@ type App struct {
 	SSH   *sshconn.Manager
 	Agent *agentsrv.Server
 	Term  *term.Opener
+	Links *links.Opener
 	cfg   Config
 	log   *logx.Logger
 }
@@ -67,6 +70,10 @@ func New(sender ipc.Sender, cfg Config) *App {
 	a.Term = cfg.Opener
 	if a.Term == nil {
 		a.Term = &term.Opener{}
+	}
+	a.Links = cfg.Links
+	if a.Links == nil {
+		a.Links = &links.Opener{}
 	}
 	a.Term.AgentSocket = func() (string, bool) {
 		running, p, _, _ := a.Agent.Status()
@@ -266,6 +273,10 @@ type signDecisionP struct {
 	Minutes   int    `json:"minutes,omitempty"`
 }
 
+type linkOpenP struct {
+	URL string `json:"url"`
+}
+
 type writeExportP struct {
 	Path       string `json:"path"`
 	ContentB64 string `json:"contentB64"`
@@ -303,6 +314,7 @@ func (a *App) register() {
 				"biometrics":   bio,
 				"agent":        true,
 				"terminal":     true,
+				"links":        true,
 				"systemEvents": sysevents.Available(),
 			},
 		}, nil
@@ -434,6 +446,11 @@ func (a *App) register() {
 		return nil, nil
 	})
 
+	// Links (replaces the webview's shell-backed os.open; finding PV-SEC-002).
+	ipc.Register(d, "link.open", ipc.Opts{}, func(_ context.Context, _ *ipc.Session, p *linkOpenP) (any, error) {
+		return nil, a.Links.Open(p.URL)
+	})
+
 	// Files.
 	ipc.Register(d, "fs.writeExport", ipc.Opts{}, func(_ context.Context, _ *ipc.Session, p *writeExportP) (any, error) {
 		content, err := b64(p.ContentB64, fsops.MaxFileBytes)
@@ -462,5 +479,5 @@ func Ops() []string {
 		"biometric.status", "ssh.connect", "ssh.hostKeyDecision", "ssh.promptResponse", "ssh.write",
 		"ssh.resize", "ssh.disconnect", "ssh.test", "ssh.keygen", "ssh.inspectKey", "agent.status",
 		"agent.start", "agent.stop", "agent.addKey", "agent.removeKey", "agent.signDecision",
-		"term.openExternal", "fs.writeExport", "fs.readImport"}
+		"term.openExternal", "link.open", "fs.writeExport", "fs.readImport"}
 }

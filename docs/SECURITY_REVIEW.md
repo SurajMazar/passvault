@@ -3,6 +3,13 @@
 PassVault has **not** been independently audited. Do not store real production
 secrets in it until the items below are complete.
 
+An internal, automated verification harness exists ([security/HARNESS.md](security/HARNESS.md))
+and its latest results are in [security/REPORT.md](security/REPORT.md), with
+confirmed findings in [security/FINDINGS.md](security/FINDINGS.md) and open
+items in [security/RESIDUAL_RISKS.md](security/RESIDUAL_RISKS.md). It is
+evidence for the properties it checks, not a substitute for the independent
+review below.
+
 ## Must do
 
 1. **Independent cryptographic review** of `packages/crypto` and
@@ -20,8 +27,10 @@ secrets in it until the items below are complete.
 5. **Native helper review**: IPC validation, agent socket permissions,
    `session-bind` verification, external-terminal script generation, cgo
    Keychain code, entitlements and hardened runtime.
-6. **Supply chain**: lockfile review, `pnpm audit`/`govulncheck`, pinned CI
-   actions by SHA, reproducible builds, SBOM, signing keys in an HSM.
+6. **Supply chain**: lockfile review, reproducible builds, signing keys in an
+   HSM. (Done: CI fails on high/critical `pnpm audit` advisories, runs
+   govulncheck, gitleaks and an SBOM job, and pins actions by SHA — see
+   `security.yml`.)
 7. **Operational hardening**: TLS termination + HSTS, secret management for
    `MFA_ENCRYPTION_KEY`/peppers (KMS), encrypted backups with restore drills,
    log retention, monitoring for brute-force patterns.

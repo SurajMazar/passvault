@@ -12,7 +12,7 @@
     "tour:record": "tsx src/tour/record.ts",
     "check:server-switch": "tsx src/server-switch-check.ts"
   },
-  "dependencies": {
+  "devDependencies": {
     "@passvault/sync": "workspace:*",
     "@passvault/types": "workspace:*",
     "@passvault/vault-core": "workspace:*",

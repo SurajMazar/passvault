@@ -1,0 +1,133 @@
+name: Security
+
+# Security gate (docs/security/HARNESS.md):
+#   - dependency audit: fails on high/critical advisories in production dependencies
+#   - secret scanning of the full git history (gitleaks)
+#   - govulncheck on the native helper
+#   - SBOM (CycloneDX) for every run
+#   - security harness: offline suites on every PR/push; the full harness
+#     (disposable stack, API/web/leakage suites) on main, weekly and on demand
+#
+# No secrets are used here; the default token is read-only.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Lockfile is consistent
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Audit production dependencies (fails on high/critical)
+        run: pnpm audit --prod --audit-level=high
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  govulncheck:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          go-version-input: '1.25'
+          work-dir: native/desktop-helper
+          go-package: ./...
+
+  sbom:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: .
+          format: cyclonedx-json
+          artifact-name: passvault-sbom.cdx.json
+
+  harness-offline:
+    # crypto, env-files, extension, desktop (static), native + ssh (Go), supply-chain
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.25'
+          cache-dependency-path: native/desktop-helper/go.sum
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build
+      - run: pnpm --filter @passvault/security-harness exec playwright install chromium
+      - name: Security harness (offline suites)
+        env:
+          PV_SKIP_KEYCHAIN_TESTS: '1'
+        run: pnpm --filter @passvault/security-harness security crypto env-files extension desktop native ssh supply-chain
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-harness-offline
+          path: tests/security/results/latest/
+          if-no-files-found: warn
+
+  harness-full:
+    # Full harness against a disposable Docker stack (API, sharing, sync, web, leakage …).
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build
+      - run: pnpm --filter @passvault/security-harness exec playwright install --with-deps chromium
+      - name: Local PostgreSQL for the in-process API checks
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -c "CREATE USER passvault WITH PASSWORD 'ci-only-not-a-secret' CREATEDB;"
+          sudo -u postgres psql -c "CREATE DATABASE passvault_test OWNER passvault;"
+      - name: Security harness (API suites on a disposable stack)
+        env:
+          PV_SEC_CONTAINER: docker
+          TEST_DATABASE_URL: postgresql://passvault:ci-only-not-a-secret@127.0.0.1:5432/passvault_test
+        run: pnpm --filter @passvault/security-harness security auth authorization sharing sync web leakage
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-harness-full
+          path: tests/security/results/latest/
+          if-no-files-found: warn

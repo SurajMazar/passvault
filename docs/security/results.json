@@ -1,0 +1,2780 @@
+{
+  "meta": {
+    "startedAt": "2026-10-08T11:39:06.428Z",
+    "gitCommit": "047d395af1647232c7649de0d64903f8cb822460",
+    "gitDirty": true,
+    "platform": "darwin-arm64",
+    "node": "v22.13.1",
+    "target": {
+      "apiUrl": "http://127.0.0.1:3000",
+      "disposable": true
+    },
+    "suites": [
+      "crypto",
+      "env-files",
+      "auth",
+      "authorization",
+      "sharing",
+      "sync",
+      "web",
+      "leakage",
+      "extension",
+      "desktop",
+      "native",
+      "ssh",
+      "supply-chain"
+    ],
+    "finishedAt": "2026-10-08T11:55:20.808Z"
+  },
+  "runs": [
+    {
+      "startedAt": "2026-10-08T11:39:06.428Z",
+      "gitCommit": "047d395af1647232c7649de0d64903f8cb822460",
+      "gitDirty": true,
+      "platform": "darwin-arm64",
+      "node": "v22.13.1",
+      "target": {
+        "apiUrl": "http://127.0.0.1:3000",
+        "disposable": true
+      },
+      "suites": [
+        "crypto",
+        "env-files",
+        "auth",
+        "authorization",
+        "sharing",
+        "sync",
+        "web",
+        "leakage",
+        "extension",
+        "desktop",
+        "native",
+        "ssh",
+        "supply-chain"
+      ],
+      "finishedAt": "2026-10-08T11:44:59.305Z"
+    },
+    {
+      "startedAt": "2026-10-08T11:45:47.687Z",
+      "gitCommit": "047d395af1647232c7649de0d64903f8cb822460",
+      "gitDirty": true,
+      "platform": "darwin-arm64",
+      "node": "v22.13.1",
+      "target": {
+        "apiUrl": "http://127.0.0.1:3000",
+        "disposable": true
+      },
+      "suites": [
+        "auth",
+        "web",
+        "desktop"
+      ],
+      "finishedAt": "2026-10-08T11:55:20.808Z"
+    }
+  ],
+  "results": [
+    {
+      "suite": "crypto",
+      "id": "crypto.xchacha.cross-impl",
+      "title": "Envelope AEAD equals XChaCha20-Poly1305-IETF from an independent implementation (@noble/ciphers), both directions",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "lengths 0,1,63,64,1000,65537: both directions round-trip with header||context as AAD",
+      "durationMs": 136
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.argon2id.cross-impl",
+      "title": "Master-key derivation equals Argon2id (v1.3, p=1) from an independent implementation (hash-wasm)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "ops=2/mem=32MiB and ops=3/mem=64MiB (default) match hash-wasm argon2id byte for byte",
+      "durationMs": 544
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.subkeys.cross-impl",
+      "title": "authKey/wrapKey derivation equals BLAKE2b keyed KDF (crypto_kdf) computed independently with @noble/hashes",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "contexts PVauthky, PVwrapky, PVrcauth, PVrcwrap match",
+      "durationMs": 2
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.ed25519-x25519-blake2b.cross-impl",
+      "title": "Signatures, key agreement and fingerprints interoperate with @noble/curves and @noble/hashes",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "Ed25519 both directions, X25519 shared secret, BLAKE2b-256 equal",
+      "durationMs": 46
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.tamper.aead",
+      "title": "Any modified byte of an envelope (header, nonce, ciphertext, tag) is rejected",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "116 single-bit modifications rejected; truncated/empty/garbage/wrong-key rejected",
+      "durationMs": 4
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.format.no-fallback",
+      "title": "Unknown envelope versions/algorithms are refused (no silent fallback to another format)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "version 2 → UnsupportedFormatError; AEAD envelope tagged as sealed → UnsupportedFormatError; algorithm 9 → UnsupportedFormatError; sealed box tagged as AEAD → UnsupportedFormatError",
+      "durationMs": 1
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.binding.records",
+      "title": "Record ciphertexts are bound to their record and vault (no swapping payloads or keys between records/vaults)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "payload swap → DecryptionError; key-wrap swap → DecryptionError; same record claimed in another vault → DecryptionError",
+      "durationMs": 1
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.binding.account-keys",
+      "title": "Account key wraps are bound to their purpose (user key, private keys, settings, personal vault key version, device unlock)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "wrong key version, other vault, private-key purpose swap, settings→user-key, other device id: all rejected",
+      "durationMs": 1
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.grants.verification",
+      "title": "Shared-vault key grants: wrong recipient, vault, key version, missing or forged signature are rejected",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "rejections: GrantVerificationError, GrantVerificationError, GrantVerificationError, GrantVerificationError, GrantVerificationError, GrantVerificationError, DecryptionError",
+      "durationMs": 149
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.public-key-binding",
+      "title": "A substituted encryption public key is detected by the identity signature",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "publicKeySignature binds the X25519 key to the Ed25519 identity",
+      "durationMs": 49
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.nonces.unique",
+      "title": "AEAD nonces are 192-bit random and do not repeat (200,000 encryptions under one key)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "200000 distinct 24-byte nonces (random nonces; no counter state to desynchronise)",
+      "durationMs": 8832
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.randomness.source",
+      "title": "Security code uses the libsodium CSPRNG (no Math.random in crypto, vault, server or client key paths)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "no Math.random in source",
+      "durationMs": 26
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.generator.uniform",
+      "title": "Password generator draws every character from the CSPRNG over the full alphabet",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "25600 chars, 89 distinct symbols, chi²=102.1 (df=88)",
+      "durationMs": 93
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.kdf.bounds",
+      "title": "KDF parameters outside the documented bounds are refused (client side)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "defaults ops=3 mem=64MiB; refused: opsLimit 1, opsLimit 11, memLimit 16 MiB, memLimit 2 GiB, 15-byte salt, argon2i, version 2",
+      "durationMs": 0
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.key-separation",
+      "title": "Login credential, wrap key and recovery subkeys are independent",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "authKey ≠ wrapKey; authKey cannot decrypt encryptedUserKey; recovery and password credentials differ",
+      "durationMs": 97
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.padding",
+      "title": "Payload sizes are hidden to 128-byte blocks",
+      "status": "pass",
+      "severity": "low",
+      "evidence": "string lengths 0–99 → 170 byte envelopes",
+      "durationMs": 6
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.password-change",
+      "title": "Changing the master password re-wraps the same user key; the old password no longer unlocks the new bundle",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "new password unlocks; old password → WrongPasswordError; fresh salt",
+      "durationMs": 193
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.recovery-key",
+      "title": "Recovery key unlocks; mistyped or foreign recovery keys are rejected",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "typo → InvalidRecoveryKeyError (checksum); other account's key → InvalidRecoveryKeyError",
+      "durationMs": 99
+    },
+    {
+      "suite": "crypto",
+      "id": "crypto.rollback-detection",
+      "title": "A server replaying an OLDER ciphertext of the same record is detected by the client",
+      "status": "fail",
+      "severity": "medium",
+      "evidence": "old revision decrypted without error (password field = \"old value\"); revisions are server metadata, not authenticated by the client",
+      "finding": "PV-SEC-004",
+      "durationMs": 0,
+      "acceptedRisk": {
+        "id": "AR-1",
+        "owner": "maintainer (@SurajMazar)",
+        "expires": "2027-01-31",
+        "rationale": "PV-SEC-004: clients cannot detect a server replaying an older revision of a record. Fixing it needs a protocol change (authenticated revision numbers bound into the payload AAD plus per-device high-water marks, or a signed per-vault change log) that requires specialist cryptographic review. Impact limited to a malicious/compromised server; data stays confidential."
+      }
+    },
+    {
+      "suite": "env-files",
+      "id": "env.no-exec.static",
+      "title": "The env parser has no code-execution or process primitives",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "no child_process/eval/Function/dynamic import/process.env in packages/env-parser/src",
+      "durationMs": 22
+    },
+    {
+      "suite": "env-files",
+      "id": "env.no-exec.dynamic",
+      "title": "Importing, editing, diffing and exporting shell-substitution content never executes it",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "values kept literally; $(…)/${…} flagged hasInterpolation, backticks parsed as a quote style with a warning; no marker file created",
+      "durationMs": 2
+    },
+    {
+      "suite": "env-files",
+      "id": "env.roundtrip.fuzz",
+      "title": "Raw → structured → raw is byte-for-byte lossless, including invalid and unsupported lines (5,000 random files)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "5000 generated files (seed 20261008) incl. CRLF, multiline, duplicates, invalid lines, unterminated quotes",
+      "durationMs": 67
+    },
+    {
+      "suite": "env-files",
+      "id": "env.edit.fuzz",
+      "title": "Structured edits change only the target entry; unsafe edits are refused, never applied partially (3,000 edits)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "2697 edits applied exactly, 5 refused (seed 4242)",
+      "durationMs": 108
+    },
+    {
+      "suite": "env-files",
+      "id": "env.issues.no-values",
+      "title": "Parser issue messages never contain value text",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "5 issues reported; canary absent in messages",
+      "durationMs": 0
+    },
+    {
+      "suite": "env-files",
+      "id": "env.resource-limits",
+      "title": "Large and pathological inputs parse in bounded time (no catastrophic backtracking)",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "5 MB value 144 ms; 100k escaped quotes 3 ms; 50k lines 83 ms; unterminated quote + 20k lines 8 ms",
+      "durationMs": 246
+    },
+    {
+      "suite": "env-files",
+      "id": "env.unit-tests",
+      "title": "env-parser unit tests (parse, edit, query, round-trip)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "65/65 passed in packages/env-parser",
+      "durationMs": 2484
+    },
+    {
+      "suite": "env-files",
+      "id": "env.export.path",
+      "title": "Desktop export path/symlink handling",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "covered by security/native (Go fsops tests: traversal, symlinks, permissions)",
+      "durationMs": 0
+    },
+    {
+      "suite": "auth",
+      "id": "auth.register.no-enumeration",
+      "title": "register/start answers identically for existing and new emails",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "existing → 202 (empty); new → 202 (empty)",
+      "durationMs": 17
+    },
+    {
+      "suite": "auth",
+      "id": "auth.register.code-attempt-limit",
+      "title": "Five wrong email codes burn the code; the correct code is then refused",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "wrong codes: 400 invalid_code, 400 invalid_code, 400 invalid_code, 400 invalid_code, 400 invalid_code; correct code afterwards → 400 invalid_code",
+      "durationMs": 362
+    },
+    {
+      "suite": "auth",
+      "id": "auth.register.token-single-use-and-bound",
+      "title": "Registration tokens are single-use and bound to the verified email",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "token for A used with email B → 400 invalid_code; first use → 201; reuse → 400 invalid_code",
+      "durationMs": 758
+    },
+    {
+      "suite": "auth",
+      "id": "auth.register.kdf-bounds",
+      "title": "The server refuses registrations and password changes with KDF parameters below the minimum",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "opsLimit 1 → 400 validation_failed; memLimit 1 MiB → 400 validation_failed",
+      "durationMs": 436
+    },
+    {
+      "suite": "auth",
+      "id": "auth.prelogin.no-enumeration",
+      "title": "prelogin returns a well-formed, stable KDF record for unknown emails",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "unknown → algorithm,memLimitBytes,opsLimit,salt,version (salt stable: true); known → algorithm,memLimitBytes,opsLimit,salt,version. Note: an unknown email always gets the default parameters (ops 3, mem 67108864); accounts created with non-default parameters are distinguishable (documented).",
+      "durationMs": 12
+    },
+    {
+      "suite": "auth",
+      "id": "auth.login.no-enumeration",
+      "title": "Wrong credentials for a known account and any credentials for an unknown email get the same answer",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "known+wrong → 401 invalid_credentials \"Invalid email or credentials\"; unknown → 401 invalid_credentials \"Invalid email or credentials\"",
+      "durationMs": 281
+    },
+    {
+      "suite": "auth",
+      "id": "auth.mfa.required",
+      "title": "Password alone yields no session: the pending MFA token cannot call the API",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "login → status=mfa_required, session=absent; mfaToken as bearer: /account 401 unauthenticated, /sync 401 unauthenticated",
+      "durationMs": 128
+    },
+    {
+      "suite": "auth",
+      "id": "auth.mfa.totp-replay",
+      "title": "A TOTP code is accepted once; replaying it (same 30 s window) is refused",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "first use → 200; replay → 403 mfa_invalid; previous window's code → 403 mfa_invalid",
+      "durationMs": 5658
+    },
+    {
+      "suite": "auth",
+      "id": "auth.mfa.attempt-limit",
+      "title": "Five wrong MFA codes revoke the pending sign-in (a correct code is then refused)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "wrong codes: 401 mfa_invalid, 401 mfa_invalid, 401 mfa_invalid, 401 mfa_invalid, 401 mfa_invalid; correct code afterwards → 401 unauthenticated",
+      "durationMs": 29601
+    },
+    {
+      "suite": "auth",
+      "id": "auth.mfa.recovery-code-single-use",
+      "title": "A recovery code signs in once; the same code is refused afterwards",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "first use → 200 (remaining 9); reuse → 401 mfa_invalid",
+      "durationMs": 266
+    },
+    {
+      "suite": "auth",
+      "id": "auth.mfa.recovery-code-race",
+      "title": "Concurrent redemption of one recovery code across 4 pending sign-ins succeeds exactly once",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "results: 401 mfa_invalid, 401 mfa_invalid, 200, 401 mfa_invalid",
+      "durationMs": 535
+    },
+    {
+      "suite": "auth",
+      "id": "auth.session.tokens",
+      "title": "Malformed, tampered, pending and revoked tokens are all refused",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "no header → 401 unauthenticated; empty bearer → 401 unauthenticated; short token → 401 unauthenticated; 200-char token → 401 unauthenticated; non-base64url chars → 401 unauthenticated; flipped last char → 401 unauthenticated; Basic scheme → 401 unauthenticated; token in query only → 401 unauthenticated; valid → 200; after logout → 401 unauthenticated; other session → 200",
+      "durationMs": 28421
+    },
+    {
+      "suite": "auth",
+      "id": "auth.session.rotation",
+      "title": "Completing MFA issues a new token and retires the pending one (no fixation, no reuse)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "active token differs from pending token: true; pending token reused → 401 unauthenticated",
+      "durationMs": 59938
+    },
+    {
+      "suite": "auth",
+      "id": "auth.stepup.required",
+      "title": "Sensitive actions require a recent re-authentication (password + TOTP)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "change password → 403 reauth_required; regenerate recovery codes → 403 reauth_required; sign out everywhere → 403 reauth_required; re-enroll MFA → 403 reauth_required",
+      "durationMs": 30104
+    },
+    {
+      "suite": "auth",
+      "id": "auth.reauth.recovery-code-not-accepted",
+      "title": "Re-authentication cannot be satisfied with a recovery code or a wrong password",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "recovery code → 400 validation_failed; another account's authKey → 403 invalid_credentials",
+      "durationMs": 30028
+    },
+    {
+      "suite": "auth",
+      "id": "auth.password-change",
+      "title": "Password change (after re-auth) retires the old credential and can sign out other sessions",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "change → 204; other session → 401 unauthenticated; old credential → 401 invalid_credentials; new credential → 200 (mfa_required)",
+      "durationMs": 60476
+    },
+    {
+      "suite": "auth",
+      "id": "auth.no-cookies",
+      "title": "The API never sets cookies (bearer tokens only, so cookie CSRF does not apply)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "99 responses inspected; 0 with Set-Cookie",
+      "durationMs": 1
+    },
+    {
+      "suite": "auth",
+      "id": "auth.cors",
+      "title": "CORS: other origins get no access; allowed origins get an exact origin without credentials",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "evil → ACAO=null; null → ACAO=null; allowed → ACAO=http://127.0.0.1:4317, credentials=null",
+      "durationMs": 4
+    },
+    {
+      "suite": "auth",
+      "id": "auth.mail-links.host-header",
+      "title": "Emailed links use the configured web URL, not request headers (no host-header injection)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "link origin: http://127.0.0.1:4317; mail mentions evil.example: false",
+      "durationMs": 328
+    },
+    {
+      "suite": "auth",
+      "id": "auth.recovery.needs-recovery-key",
+      "title": "Email + MFA alone cannot take over a vault: completing recovery needs the vault recovery key; links are single-use",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "verify → 200 (fields: recoveryToken, expiresAt, encryptedUserKeyByRecovery, keys); link reuse → 401 unauthenticated; complete-vault with a wrong recovery key → 401 invalid_credentials",
+      "durationMs": 59242
+    },
+    {
+      "suite": "auth",
+      "id": "auth.recovery.reset-destroys-data",
+      "title": "Account reset via email + MFA destroys vault data instead of exposing it, and revokes all sessions",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "reset → 204; old session → 401 unauthenticated; old record afterwards → 404 not_found (tombstoned, ciphertext dropped)",
+      "durationMs": 59841
+    },
+    {
+      "suite": "auth",
+      "id": "auth.email-change",
+      "title": "Email-change flow",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "no email-change endpoint exists (API surface reviewed: 47 routes)",
+      "durationMs": 0
+    },
+    {
+      "suite": "auth",
+      "id": "auth.refresh-token",
+      "title": "Refresh-token replay",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "no refresh tokens: opaque server-side sessions, looked up on every request",
+      "durationMs": 0
+    },
+    {
+      "suite": "auth",
+      "id": "auth.oauth-redirects",
+      "title": "Open redirects / OAuth callbacks",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "the API issues no redirects and has no OAuth/SSO callbacks; emailed links are covered by auth.mail-links.host-header",
+      "durationMs": 0
+    },
+    {
+      "suite": "auth",
+      "id": "auth.time-dependent",
+      "title": "Time-dependent server rules: lockout without enumeration, code/link/reauth/session/membership expiry (in-process API, fake clock)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "6/6 passed in apps/api",
+      "finding": "PV-SEC-001",
+      "durationMs": 4722
+    },
+    {
+      "suite": "auth",
+      "id": "auth.rate-limit.per-ip",
+      "title": "Per-IP throttling on authentication endpoints (429 with Retry-After)",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "30 parallel prelogin calls: 20 answered, 10 throttled (Retry-After 60s)",
+      "durationMs": 73
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-records.owner",
+      "title": "GET /vaults/S/records as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /vaults/S/records as owner → 200",
+      "durationMs": 35
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-records.editor",
+      "title": "GET /vaults/S/records as editor: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /vaults/S/records as editor → 200",
+      "durationMs": 11
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-records.viewer",
+      "title": "GET /vaults/S/records as viewer: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /vaults/S/records as viewer → 200",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-records.pending",
+      "title": "GET /vaults/S/records as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/records as pending → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-records.revoked",
+      "title": "GET /vaults/S/records as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/records as revoked → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-records.expired",
+      "title": "GET /vaults/S/records as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/records as expired → 403 membership_expired",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-records.unrelated",
+      "title": "GET /vaults/S/records as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/records as unrelated → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.get-record.owner",
+      "title": "GET /records/:id as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /records/:id as owner → 200",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.get-record.editor",
+      "title": "GET /records/:id as editor: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /records/:id as editor → 200",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.get-record.viewer",
+      "title": "GET /records/:id as viewer: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /records/:id as viewer → 200",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.get-record.pending",
+      "title": "GET /records/:id as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id as pending → 403 forbidden",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.get-record.revoked",
+      "title": "GET /records/:id as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id as revoked → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.get-record.expired",
+      "title": "GET /records/:id as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id as expired → 403 membership_expired",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.get-record.unrelated",
+      "title": "GET /records/:id as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id as unrelated → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.record-versions.owner",
+      "title": "GET /records/:id/versions as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /records/:id/versions as owner → 200",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.record-versions.editor",
+      "title": "GET /records/:id/versions as editor: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /records/:id/versions as editor → 200",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.record-versions.viewer",
+      "title": "GET /records/:id/versions as viewer: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /records/:id/versions as viewer → 200",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.record-versions.pending",
+      "title": "GET /records/:id/versions as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id/versions as pending → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.record-versions.revoked",
+      "title": "GET /records/:id/versions as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id/versions as revoked → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.record-versions.expired",
+      "title": "GET /records/:id/versions as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id/versions as expired → 403 membership_expired",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.record-versions.unrelated",
+      "title": "GET /records/:id/versions as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /records/:id/versions as unrelated → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-members.owner",
+      "title": "GET /vaults/S/members as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /vaults/S/members as owner → 200",
+      "durationMs": 9
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-members.editor",
+      "title": "GET /vaults/S/members as editor: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /vaults/S/members as editor → 200",
+      "durationMs": 12
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-members.viewer",
+      "title": "GET /vaults/S/members as viewer: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "GET /vaults/S/members as viewer → 200",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-members.pending",
+      "title": "GET /vaults/S/members as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/members as pending → 403 forbidden",
+      "durationMs": 4
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-members.revoked",
+      "title": "GET /vaults/S/members as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/members as revoked → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-members.expired",
+      "title": "GET /vaults/S/members as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/members as expired → 403 membership_expired",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.list-members.unrelated",
+      "title": "GET /vaults/S/members as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "GET /vaults/S/members as unrelated → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.create-record.owner",
+      "title": "POST /records into S as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "POST /records into S as owner → 201",
+      "durationMs": 16
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.create-record.editor",
+      "title": "POST /records into S as editor: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "POST /records into S as editor → 201",
+      "durationMs": 30
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.create-record.viewer",
+      "title": "POST /records into S as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /records into S as viewer → 403 forbidden",
+      "durationMs": 9
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.create-record.pending",
+      "title": "POST /records into S as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /records into S as pending → 403 forbidden",
+      "durationMs": 8
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.create-record.revoked",
+      "title": "POST /records into S as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /records into S as revoked → 404 not_found",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.create-record.expired",
+      "title": "POST /records into S as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /records into S as expired → 403 membership_expired",
+      "durationMs": 8
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.create-record.unrelated",
+      "title": "POST /records into S as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /records into S as unrelated → 404 not_found",
+      "durationMs": 8
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-record.owner",
+      "title": "PUT /records/:id as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "PUT /records/:id as owner → 200",
+      "durationMs": 29
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-record.editor",
+      "title": "PUT /records/:id as editor: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "PUT /records/:id as editor → 200",
+      "durationMs": 23
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-record.viewer",
+      "title": "PUT /records/:id as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PUT /records/:id as viewer → 403 forbidden",
+      "durationMs": 21
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-record.pending",
+      "title": "PUT /records/:id as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PUT /records/:id as pending → 403 forbidden",
+      "durationMs": 26
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-record.revoked",
+      "title": "PUT /records/:id as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PUT /records/:id as revoked → 404 not_found",
+      "durationMs": 22
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-record.expired",
+      "title": "PUT /records/:id as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PUT /records/:id as expired → 403 membership_expired",
+      "durationMs": 29
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-record.unrelated",
+      "title": "PUT /records/:id as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PUT /records/:id as unrelated → 404 not_found",
+      "durationMs": 26
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-record.owner",
+      "title": "DELETE /records/:id as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "DELETE /records/:id as owner → 200",
+      "durationMs": 35
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-record.editor",
+      "title": "DELETE /records/:id as editor: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "DELETE /records/:id as editor → 200",
+      "durationMs": 34
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-record.viewer",
+      "title": "DELETE /records/:id as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /records/:id as viewer → 403 forbidden",
+      "durationMs": 28
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-record.pending",
+      "title": "DELETE /records/:id as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /records/:id as pending → 403 forbidden",
+      "durationMs": 17
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-record.revoked",
+      "title": "DELETE /records/:id as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /records/:id as revoked → 404 not_found",
+      "durationMs": 21
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-record.expired",
+      "title": "DELETE /records/:id as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /records/:id as expired → 403 membership_expired",
+      "durationMs": 20
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-record.unrelated",
+      "title": "DELETE /records/:id as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /records/:id as unrelated → 404 not_found",
+      "durationMs": 17
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invite.owner",
+      "title": "POST /vaults/S/members (invite) as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "POST /vaults/S/members (invite) as owner → 201",
+      "durationMs": 31
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invite.editor",
+      "title": "POST /vaults/S/members (invite) as editor: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/members (invite) as editor → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invite.viewer",
+      "title": "POST /vaults/S/members (invite) as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/members (invite) as viewer → 403 forbidden",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invite.pending",
+      "title": "POST /vaults/S/members (invite) as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/members (invite) as pending → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invite.revoked",
+      "title": "POST /vaults/S/members (invite) as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/members (invite) as revoked → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invite.expired",
+      "title": "POST /vaults/S/members (invite) as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/members (invite) as expired → 403 membership_expired",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invite.unrelated",
+      "title": "POST /vaults/S/members (invite) as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/members (invite) as unrelated → 404 not_found",
+      "durationMs": 8
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.change-role.owner",
+      "title": "PATCH /vaults/S/members/:viewer (role change) as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "PATCH /vaults/S/members/:viewer (role change) as owner → 200",
+      "durationMs": 25
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.change-role.editor",
+      "title": "PATCH /vaults/S/members/:viewer (role change) as editor: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S/members/:viewer (role change) as editor → 403 forbidden",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.change-role.viewer",
+      "title": "PATCH /vaults/S/members/:viewer (role change) as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S/members/:viewer (role change) as viewer → 403 forbidden",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.change-role.pending",
+      "title": "PATCH /vaults/S/members/:viewer (role change) as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S/members/:viewer (role change) as pending → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.change-role.revoked",
+      "title": "PATCH /vaults/S/members/:viewer (role change) as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S/members/:viewer (role change) as revoked → 404 not_found",
+      "durationMs": 14
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.change-role.expired",
+      "title": "PATCH /vaults/S/members/:viewer (role change) as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S/members/:viewer (role change) as expired → 403 membership_expired",
+      "durationMs": 15
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.change-role.unrelated",
+      "title": "PATCH /vaults/S/members/:viewer (role change) as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S/members/:viewer (role change) as unrelated → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.remove-owner.owner",
+      "title": "DELETE /vaults/S/members/:owner (remove another member) as owner: passes authorization",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S/members/:owner (remove another member) as owner → 409 conflict",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.remove-owner.editor",
+      "title": "DELETE /vaults/S/members/:owner (remove another member) as editor: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S/members/:owner (remove another member) as editor → 403 forbidden",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.remove-owner.viewer",
+      "title": "DELETE /vaults/S/members/:owner (remove another member) as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S/members/:owner (remove another member) as viewer → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.remove-owner.pending",
+      "title": "DELETE /vaults/S/members/:owner (remove another member) as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S/members/:owner (remove another member) as pending → 403 forbidden",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.remove-owner.revoked",
+      "title": "DELETE /vaults/S/members/:owner (remove another member) as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S/members/:owner (remove another member) as revoked → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.remove-owner.expired",
+      "title": "DELETE /vaults/S/members/:owner (remove another member) as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S/members/:owner (remove another member) as expired → 403 membership_expired",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.remove-owner.unrelated",
+      "title": "DELETE /vaults/S/members/:owner (remove another member) as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S/members/:owner (remove another member) as unrelated → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.rotate.owner",
+      "title": "POST /vaults/S/rotate as owner: passes authorization",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/rotate as owner → 409 conflict",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.rotate.editor",
+      "title": "POST /vaults/S/rotate as editor: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/rotate as editor → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.rotate.viewer",
+      "title": "POST /vaults/S/rotate as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/rotate as viewer → 403 forbidden",
+      "durationMs": 8
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.rotate.pending",
+      "title": "POST /vaults/S/rotate as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/rotate as pending → 403 forbidden",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.rotate.revoked",
+      "title": "POST /vaults/S/rotate as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/rotate as revoked → 404 not_found",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.rotate.expired",
+      "title": "POST /vaults/S/rotate as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/rotate as expired → 403 membership_expired",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.rotate.unrelated",
+      "title": "POST /vaults/S/rotate as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "POST /vaults/S/rotate as unrelated → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-vault.owner",
+      "title": "PATCH /vaults/S (resharing setting) as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "PATCH /vaults/S (resharing setting) as owner → 200",
+      "durationMs": 21
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-vault.editor",
+      "title": "PATCH /vaults/S (resharing setting) as editor: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S (resharing setting) as editor → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-vault.viewer",
+      "title": "PATCH /vaults/S (resharing setting) as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S (resharing setting) as viewer → 403 forbidden",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-vault.pending",
+      "title": "PATCH /vaults/S (resharing setting) as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S (resharing setting) as pending → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-vault.revoked",
+      "title": "PATCH /vaults/S (resharing setting) as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S (resharing setting) as revoked → 404 not_found",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-vault.expired",
+      "title": "PATCH /vaults/S (resharing setting) as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S (resharing setting) as expired → 403 membership_expired",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.update-vault.unrelated",
+      "title": "PATCH /vaults/S (resharing setting) as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "PATCH /vaults/S (resharing setting) as unrelated → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-vault.owner",
+      "title": "DELETE /vaults/S as owner: allowed",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "DELETE /vaults/S as owner → 204",
+      "durationMs": 26
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-vault.editor",
+      "title": "DELETE /vaults/S as editor: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S as editor → 403 forbidden",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-vault.viewer",
+      "title": "DELETE /vaults/S as viewer: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S as viewer → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-vault.pending",
+      "title": "DELETE /vaults/S as pending: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S as pending → 403 forbidden",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-vault.revoked",
+      "title": "DELETE /vaults/S as revoked: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S as revoked → 404 not_found",
+      "durationMs": 6
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-vault.expired",
+      "title": "DELETE /vaults/S as expired: refused (403)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S as expired → 403 membership_expired",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.delete-vault.unrelated",
+      "title": "DELETE /vaults/S as unrelated: refused (404)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "DELETE /vaults/S as unrelated → 404 not_found",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.personal-vault.isolated",
+      "title": "Another user's personal vault is invisible (read, write, invite)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "unrelated: list 404 not_found, create 404 not_found, members 404 not_found; owner sharing own personal vault → 403 forbidden",
+      "durationMs": 21
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.id-substitution.body",
+      "title": "Identifiers in request bodies cannot redirect writes into vaults the caller cannot write",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "editor creates in foreign vault → 404 not_found; editor moves S record to foreign vault → 404 not_found; viewer moves S record out → 403 forbidden; outsider moves own record into S → 404 not_found",
+      "durationMs": 59
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.mass-assignment",
+      "title": "Unknown or server-controlled fields are rejected (strict schemas)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "record createdById/revision → 400 validation_failed; vault ownerId → 400 validation_failed; invite status=accepted → 400 validation_failed; member role=owner by editor → 403 forbidden; __proto__ in body → 400 validation_failed; settings extra field → 400 validation_failed",
+      "durationMs": 18
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.invitations",
+      "title": "Invitations can only be accepted by the invited account, and not after decline, revocation or expiry",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "other account accepts → 404 not_found; decline → 204; accept after decline → 404 not_found; revoked member re-accepts → 404 not_found; expired member accepts → 404 not_found",
+      "durationMs": 53
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.editor-escalation",
+      "title": "Editors cannot grant owner, change roles, or invite when resharing is disabled",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "grant owner (resharing off) → 403 forbidden; self-promote → 403 forbidden; with resharing on: grant owner → 403 forbidden, grant editor → 201 (allowed by design)",
+      "durationMs": 60
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.sessions-devices",
+      "title": "Users cannot list, revoke or forget other users' sessions and devices",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "revoke other's session → 404 not_found; forget other's device → 404 not_found; untrust → 404 not_found; owner still signed in → 200; other's session listed to outsider: false",
+      "durationMs": 26
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.sync-isolation",
+      "title": "Sync returns only vaults and records of live memberships (no revoked, expired, pending or foreign data)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "pending: vault listed=false, S records=0; revoked: vault listed=false, S records=0; expired: vault listed=false, S records=0; unrelated: vault listed=false, S records=0; editor (control): S records=19",
+      "durationMs": 52
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.pagination",
+      "title": "Cursor manipulation cannot page into other vaults",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "foreign vault page → 404 not_found; cursor -1 → 400 validation_failed; 40-digit cursor → 400 validation_failed; \"0 OR 1=1\" → 400 validation_failed",
+      "durationMs": 16
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.lookup.public-fields-only",
+      "title": "User lookup returns only public identity fields",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "fields: email, name, publicEncryptionKey, publicKeySignature, publicSigningKey, userId",
+      "durationMs": 5
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.audit-isolation",
+      "title": "Audit events of other users' vaults are not visible",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "3 events for the outsider; 0 about other users or vault S",
+      "durationMs": 7
+    },
+    {
+      "suite": "authorization",
+      "id": "authz.revocation-race",
+      "title": "Writes racing a revocation are either applied before it or refused; none land afterwards",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "removal → 204; concurrent updates: 1 applied (codes 200/404/409; same base revision so at most one can win); update after removal → 404 not_found; final revision 2",
+      "durationMs": 978
+    },
+    {
+      "suite": "sharing",
+      "id": "share.invite-accept-decrypt",
+      "title": "Recipient cannot read before accepting; after accepting, the signed grant opens and the record decrypts",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "before accept → 403 forbidden; after accept: grant verified against the inviter's signing key and record decrypted",
+      "durationMs": 46
+    },
+    {
+      "suite": "sharing",
+      "id": "share.client-sees-shared",
+      "title": "The real client (vault-core) of the recipient caches and decrypts the shared item",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "shared item in Bob's decrypted snapshot: true",
+      "durationMs": 0
+    },
+    {
+      "suite": "sharing",
+      "id": "share.viewer-cannot-write",
+      "title": "A viewer cannot modify, delete or reshare",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "update → 403 forbidden; delete → 403 forbidden; reshare → 403 forbidden",
+      "durationMs": 26
+    },
+    {
+      "suite": "sharing",
+      "id": "share.revoke-stops-access",
+      "title": "Removing a member stops API access immediately and forces a key rotation before new invitations",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "remove → 204; Bob reads record → 404 not_found; lists vault → 404 not_found; owner invites someone before rotating → 409 key_rotation_required",
+      "durationMs": 33
+    },
+    {
+      "suite": "sharing",
+      "id": "share.offline-client-after-revocation",
+      "title": "The revoked member's client drops the vault from its cache on next sync; its queued edits are rejected",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "before sync: visible=true; after sync: visible=false, ciphertext still in cache=false; stale write from revoked device → 404 not_found. Plaintext Bob already saw (copies, screenshots, exports) cannot be recalled — revocation stops future access only.",
+      "durationMs": 27
+    },
+    {
+      "suite": "sharing",
+      "id": "share.rotation-rules",
+      "title": "Rotation must cover exactly the live members and live records, and must not re-grant the revoked member",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "grant incl. revoked member → 409 conflict; no grants → 400; exact members → 200 (key version now 2)",
+      "durationMs": 32
+    },
+    {
+      "suite": "sharing",
+      "id": "share.old-key-useless-for-new-data",
+      "title": "After rotation, the revoked member's old vault key cannot unwrap keys of new or re-wrapped records",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "new record with v1 key → DecryptionError; re-wrapped existing record with v1 key → DecryptionError",
+      "durationMs": 20
+    },
+    {
+      "suite": "sharing",
+      "id": "share.stale-grant-refused",
+      "title": "Invitations made with an old key version are refused after rotation",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "grant for key v1 → 409 conflict; grant for current key v2 → 201",
+      "durationMs": 19
+    },
+    {
+      "suite": "sharing",
+      "id": "share.last-owner",
+      "title": "The last owner cannot leave or be removed (the vault would become unmanageable)",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "owner leaves → 409 conflict; owner demotes self → 409 conflict",
+      "durationMs": 13
+    },
+    {
+      "suite": "sharing",
+      "id": "share.expiry",
+      "title": "Time-limited access ends at its expiry (no job needed) and the vault then requires rotation",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "during → 200; after expiry → 403 membership_expired",
+      "durationMs": 7067
+    },
+    {
+      "suite": "sharing",
+      "id": "share.client-signature-check",
+      "title": "The recipient's client refuses a grant whose signature does not verify",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "server accepted the mis-signed grant (201) — it cannot verify signatures without trusting keys itself; the client refused it: GrantVerificationError",
+      "durationMs": 81
+    },
+    {
+      "suite": "sync",
+      "id": "sync.idempotent-replay",
+      "title": "A replayed mutation returns the original result and is applied once; reusing its id with a different body changes nothing",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "first → 201; replay → 201 (same result: true); same mutation id, other payload → stored result returned: true; record revision 1, payload unchanged: true",
+      "durationMs": 25
+    },
+    {
+      "suite": "sync",
+      "id": "sync.mutation-ids-per-user",
+      "title": "Another user replaying someone's mutation id gets no stored response (idempotency is per user)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "B replays A's create (same mutation id) → 404 not_found",
+      "durationMs": 18
+    },
+    {
+      "suite": "sync",
+      "id": "sync.stale-base-revision",
+      "title": "Writes based on an old revision are refused with the current version for client-side merge",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "update → 200; stale update → 409 revision_conflict with current revision 2",
+      "durationMs": 31
+    },
+    {
+      "suite": "sync",
+      "id": "sync.concurrent-updates",
+      "title": "Ten concurrent updates on the same base revision: exactly one wins, the rest conflict",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "1 applied, 9 conflicts, final revision 2",
+      "durationMs": 99
+    },
+    {
+      "suite": "sync",
+      "id": "sync.tombstones",
+      "title": "Permanently deleted records stay deleted: no read, update, re-create or resurrection through sync",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "delete → 200; get → 410 gone; update → 410 gone; re-create same id → 409 already_exists; versions → 410 gone; sync row: deletedAt set, ciphertext dropped",
+      "durationMs": 85
+    },
+    {
+      "suite": "sync",
+      "id": "sync.cursor",
+      "title": "Sync cursors never move backwards and replays are stable",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "cursor ahead of the server stays at 1136 (≥ 1136); replay from 0 returned 5 = 5 records",
+      "durationMs": 37
+    },
+    {
+      "suite": "sync",
+      "id": "sync.membership-change-mid-sync",
+      "title": "A member removed between two sync pages receives no further records of that vault",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "page 1 before removal; removal → 204; 1 later page(s) contained 0 item(s) of the vault",
+      "durationMs": 121
+    },
+    {
+      "suite": "sync",
+      "id": "sync.revoked-replay",
+      "title": "Replaying a stored mutation after losing access re-sends only the original response and writes nothing",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "original → 201; replay after revocation → 201 (stored response of B's own earlier write, no new data); new write → 404 not_found; record revision 1",
+      "durationMs": 71
+    },
+    {
+      "suite": "sync",
+      "id": "sync.atomic-rotation",
+      "title": "A rotation with one stale record fails as a whole (no partial key change)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "rotation → 409 revision_conflict; untouched record revision 1; vault key version 1",
+      "durationMs": 70
+    },
+    {
+      "suite": "sync",
+      "id": "sync.engine-tests",
+      "title": "Client sync engine: outbox ordering, coalescing, out-of-order pages, conflicts (unit tests)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "9/9 passed in packages/sync",
+      "durationMs": 1449
+    },
+    {
+      "suite": "sync",
+      "id": "sync.vault-core-tests",
+      "title": "vault-core: conflicts, history, lock/unlock, settings merge (unit tests)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "15/15 passed in packages/vault-core",
+      "durationMs": 2363
+    },
+    {
+      "suite": "sync",
+      "id": "sync.interrupted-writes",
+      "title": "Writes interrupted mid-transaction leave no partial state",
+      "status": "unverified",
+      "severity": "medium",
+      "evidence": "needs database fault injection (killing Postgres mid-transaction); atomic multi-row operations are covered by sync.atomic-rotation; single-row writes rely on Postgres transactions (seqTx)",
+      "durationMs": 0
+    },
+    {
+      "suite": "web",
+      "id": "web.api.headers",
+      "title": "API responses carry restrictive security headers",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "CSP \"default-src 'none';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'none';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests\"; nosniff=nosniff; x-powered-by=null; referrer-policy=no-referrer; x-frame-options=SAMEORIGIN",
+      "durationMs": 3
+    },
+    {
+      "suite": "web",
+      "id": "web.errors.no-internals",
+      "title": "Error responses do not leak stack traces, SQL or framework internals",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "400 validation_failed; 400 validation_failed; 401 unauthenticated; 404 not_found; 400 validation_failed",
+      "durationMs": 60283
+    },
+    {
+      "suite": "web",
+      "id": "web.api.body-limits",
+      "title": "Oversized and deeply nested bodies are rejected quickly and the API stays healthy",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "4 MB body → 413 validation_failed; 100k-deep JSON → 400 validation_failed in 37 ms; health afterwards 200",
+      "durationMs": 104
+    },
+    {
+      "suite": "web",
+      "id": "web.api.injection",
+      "title": "Injection-shaped input is rejected by validation, never reaching the database as code",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "probe statuses: 400 validation_failed, 400 validation_failed, 401 unauthenticated, 200; unsafe raw SQL in apps/api/src: 0; interpolated $queryRaw: 0",
+      "durationMs": 63
+    },
+    {
+      "suite": "web",
+      "id": "web.api.prototype-pollution",
+      "title": "__proto__/constructor payloads are rejected and do not alter server objects",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "__proto__ → 400 validation_failed; constructor.prototype → 400 validation_failed; later response clean: true",
+      "durationMs": 9
+    },
+    {
+      "suite": "web",
+      "id": "web.api.path-traversal",
+      "title": "Traversal-shaped paths never reach the filesystem",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "/api/v1/../../../../etc/passwd → 404; /api/v1/%2e%2e/%2e%2e/%2e%2e/etc/passwd → 404; /api/v1/..%2f..%2f..%2fetc%2fpasswd → 404; /api/v1/records/..%5c..%5cwindows → 401",
+      "durationMs": 6
+    },
+    {
+      "suite": "web",
+      "id": "web.api.no-ssrf-surface",
+      "title": "The server makes no outbound requests to user-supplied URLs",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "no HTTP client calls in apps/api/src (only SMTP via nodemailer to the configured host)",
+      "durationMs": 23
+    },
+    {
+      "suite": "web",
+      "id": "web.edge.headers",
+      "title": "Production edge (deploy/Caddyfile) sets CSP without inline/eval scripts, framing protection, HSTS, nosniff",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "CSP: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\n(style-src allows 'unsafe-inline' for React inline styles; scripts do not)",
+      "durationMs": 1
+    },
+    {
+      "suite": "web",
+      "id": "web.bundle.no-server-secrets",
+      "title": "Public web assets contain no server-only configuration names or values and no source maps",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "16 files; server-only names: none; secret values: none; source maps: 0; private keys: false",
+      "durationMs": 29
+    },
+    {
+      "suite": "web",
+      "id": "web.bundle.no-third-party",
+      "title": "The web app loads no third-party scripts, analytics, crash reporting or session replay",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "tracker/telemetry hosts: none; external <script src>: none",
+      "durationMs": 34
+    },
+    {
+      "suite": "web",
+      "id": "web.no-secrets-in-urls",
+      "title": "No credentials or tokens travel in URL query strings (API traffic so far; emailed links use #fragments)",
+      "status": "fail",
+      "severity": "medium",
+      "evidence": "169 requests inspected; 1 with credential-like query parameters",
+      "durationMs": 0
+    },
+    {
+      "suite": "web",
+      "id": "web.env-filename.validation",
+      "title": "Env-file names with path separators are refused by item validation",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "refused: [ { \"code\": \"custom\", \"path\": [ \"fields\", \"filename\" ], \"message\": \"filename must not contain path separators\" } ]",
+      "durationMs": 0
+    },
+    {
+      "suite": "web",
+      "id": "web.xss.stored",
+      "title": "Script payloads in titles, notes, tags, folders, usernames, URLs, env files and API credentials never execute",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "5 items opened (values revealed); execution flag=null; dialogs=0; javascript: links rendered=0; refused by client validation: none",
+      "durationMs": 65031
+    },
+    {
+      "suite": "leakage",
+      "id": "leak.flow-exercised",
+      "title": "The canary flows actually ran (items created, edited, shared, decrypted by the recipient)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "7 items for the owner; recipient decrypted the shared canary note: true",
+      "durationMs": 0
+    },
+    {
+      "suite": "leakage",
+      "id": "leak.traffic",
+      "title": "No item plaintext, master password or recovery key appears in any API request or response (plain or encoded)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "497 exchanges scanned for 23 secrets × 7 encodings; hits: none",
+      "durationMs": 211
+    },
+    {
+      "suite": "leakage",
+      "id": "leak.database",
+      "title": "A full database dump contains no item plaintext, master passwords, auth keys, TOTP secrets, recovery codes or session tokens",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "pg_dump 297 KiB scanned; hits: none",
+      "durationMs": 594
+    },
+    {
+      "suite": "leakage",
+      "id": "leak.server-logs",
+      "title": "API logs at debug level contain no secrets, credentials, tokens, codes or item data",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "634 log lines (LOG_LEVEL=debug) scanned; hits: none",
+      "durationMs": 247
+    },
+    {
+      "suite": "leakage",
+      "id": "leak.mail",
+      "title": "Emails carry only the intended codes/links, never item data or passwords",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "5 KiB of mail scanned; hits: none",
+      "durationMs": 44
+    },
+    {
+      "suite": "leakage",
+      "id": "leak.client-cache",
+      "title": "The client's persistent cache holds only ciphertext (no item plaintext, no master password)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "owner + recipient cache stores scanned (20 KiB); hits: none",
+      "durationMs": 1
+    },
+    {
+      "suite": "leakage",
+      "id": "leak.web-storage",
+      "title": "After sign-in, browsing and locking, web localStorage/sessionStorage/IndexedDB/cookies hold no plaintext",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "storage while unlocked: 11752 bytes (session token present: true, encrypted records present: true) → canary hits: none; after lock: 11752 bytes → none",
+      "durationMs": 31344
+    },
+    {
+      "suite": "extension",
+      "id": "ext.unit-tests",
+      "title": "Extension unit tests: sender/message validation, origin matching incl. lookalikes, fill/capture, lock/resume, logs, manifest, save prompt, servers",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "61/61 passed in apps/browser-extension",
+      "durationMs": 3074
+    },
+    {
+      "suite": "extension",
+      "id": "ext.manifest",
+      "title": "Production manifest: MV3, minimal permissions, one host, optional all-sites only, no web-accessible resources or external messaging",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "permissions activeTab,alarms,clipboardWrite,offscreen,scripting,storage; hosts [\"https://vault.example.com/*\"]; optional [\"https://*/*\",\"http://*/*\"]; content_scripts false; web_accessible_resources false; externally_connectable false; CSP script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+      "durationMs": 1
+    },
+    {
+      "suite": "extension",
+      "id": "ext.no-remote-code",
+      "title": "The packaged extension loads no remote code and contains no source maps",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "remote dynamic imports: 0; remote <script>: 0; source maps: 0",
+      "durationMs": 5
+    },
+    {
+      "suite": "extension",
+      "id": "ext.fill.correct-origin",
+      "title": "Fill on the verified origin sets exactly the visible username and password",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "{\"code\":\"filled\",\"filledUsername\":true}",
+      "durationMs": 109
+    },
+    {
+      "suite": "extension",
+      "id": "ext.fill.lookalike-origin",
+      "title": "A lookalike host (bank.example.test.evil.test) gets nothing even if asked to fill for the real origin",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "{\"code\":\"origin_mismatch\",\"filledUsername\":false}",
+      "durationMs": 58
+    },
+    {
+      "suite": "extension",
+      "id": "ext.fill.honeypots",
+      "title": "Hidden, transparent and off-screen fields are never filled",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "{\"code\":\"filled\",\"filledUsername\":true} values: decoy=\"\", display:none=\"\", off-screen=\"\", username filled=true, password filled=true",
+      "durationMs": 92
+    },
+    {
+      "suite": "extension",
+      "id": "ext.fill.hidden-only",
+      "title": "A page with only a hidden password field gets nothing",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "{\"code\":\"no_password_field\",\"filledUsername\":false}",
+      "durationMs": 56
+    },
+    {
+      "suite": "extension",
+      "id": "ext.fill.cross-origin-iframe",
+      "title": "Credentials never reach a cross-origin iframe; the function refuses to run inside frames",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "top page → no_password_field; executed inside the iframe → not_top_frame; iframe password value empty: true",
+      "durationMs": 64
+    },
+    {
+      "suite": "extension",
+      "id": "ext.fill.signup-form",
+      "title": "On sign-up/change forms the current-password field is chosen, never the new-password field",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "{\"code\":\"filled\",\"filledUsername\":true}",
+      "durationMs": 89
+    },
+    {
+      "suite": "extension",
+      "id": "ext.capture.top-frame-only",
+      "title": "Capture reads only the top document and refuses inside frames",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "top capture found password: false; in-frame capture → not_top_frame",
+      "durationMs": 65
+    },
+    {
+      "suite": "extension",
+      "id": "ext.page-isolation",
+      "title": "A web page cannot message the extension, and no content script runs before the user opts in",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "page → no chrome.runtime on the page; registered content scripts: 0; prompt element present: false",
+      "durationMs": 1367
+    },
+    {
+      "suite": "extension",
+      "id": "ext.native-messaging",
+      "title": "Native messaging accepts only approved extensions and paired clients",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "not implemented: the manifest has no nativeMessaging permission (checked by ext.manifest); desktop pairing is deferred (docs/EXTENSION.md)",
+      "durationMs": 0
+    },
+    {
+      "suite": "extension",
+      "id": "ext.save-prompt.trusted-input",
+      "title": "Save prompt with trusted input in Chromium: saves the login (and an optional note) for the real page origin",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "✓ trusted submit → prompt → Save stored the login for https://shop.example.com\n✓ trusted typing → Add note → Save stored the note with the login",
+      "durationMs": 0
+    },
+    {
+      "suite": "extension",
+      "id": "ext.server-switch.real-popup",
+      "title": "Server switching in the real toolbar popup: validation, Chrome host permission required, per-server isolation",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "✓ popup shows the current server\n✓ plain http to a public host is refused\n✓ an ungranted server is not used while the permission prompt is unanswered — selected=http://localhost:3000, granted=false\n✓ signed in on server A\n✓ server B starts signed out in its own namespace — selected=http://127.0.0.1:3000\n✓ switching back restores server A’s locked account\n✓ server A unlocks with its master password after switching back\n✓ master password is not in chrome.storage.local\n✓ storage holds one namespace per server\n9/9 passed",
+      "durationMs": 1
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.unit-tests",
+      "title": "Desktop app unit tests: server isolation, CSP builder, links, clipboard, terminal controller, lock handling, IPC client",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "64/64 passed in apps/desktop",
+      "durationMs": 3533
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.config.production",
+      "title": "Production Neutralino config: one-time token, no exported auth info, no inspector, local document root, helper as the only extension",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "tokenSecurity=one-time, exportAuthInfo=false, inspector=false, mode=window, url=/, extensions=io.passvault.helper, globalVariables=false",
+      "durationMs": 0
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.config.native-allowlist",
+      "title": "Native API allowlist is minimal: no shell-backed os.open, no process/filesystem/env access, nothing unused",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "allowlist (16): app.exit, app.broadcast, window.show, window.focus, window.unminimize, window.setMainMenu, os.showOpenDialog, os.showSaveDialog, os.setTray, extensions.dispatch, extensions.getStats, storage.getData, storage.setData, storage.removeData, clipboard.readText, clipboard.writeText\ndangerous: none; not needed by the UI: none",
+      "finding": "PV-SEC-002",
+      "durationMs": 1
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.no-direct-native-exec",
+      "title": "UI code never calls shell-backed or process APIs directly",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "none",
+      "finding": "PV-SEC-002",
+      "durationMs": 34
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.csp",
+      "title": "Desktop webview CSP: scripts only from the app, connections only to the helper, the configured server and local development",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "CSP: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws://localhost:47391 ws://127.0.0.1:47391 https://vault.example.com http://localhost:3000; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",
+      "durationMs": 2
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.runtime.helper-roundtrip",
+      "title": "The packaged app works end to end: the UI loads and the native helper answers it (allowlist not over-restricted)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "UI reached its first screen: true; helper/permission errors in console: none",
+      "durationMs": 507
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.runtime.process-args",
+      "title": "No secrets in the command lines of the app and helper processes",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "2 processes:\n53727 ~/passvault/apps/desktop/bin/neutralino-mac_arm64 --res-mode=directory --path=/Users/surajthapa/passvault/apps/desktop/.build/verify\n53735 ~/passvault/apps/desktop/dist/PassVault.app/Contents/MacOS/pv-helper\nsuspicious arguments: 0",
+      "durationMs": 52
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.runtime.one-time-token",
+      "title": "After the UI has loaded, other local clients requesting the globals get no access token",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "requests after the UI took the token: no token. Residual: a local process that requests the globals before the webview does would win the token — in window mode the webview loads immediately at start (documented).",
+      "durationMs": 4
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.runtime.ws-without-token",
+      "title": "Native API websocket refuses clients without the token, and extension connections need the connect token",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "no token → refused; fake extension connect token → refused; command executed: false",
+      "durationMs": 4
+    },
+    {
+      "suite": "desktop",
+      "id": "desktop.runtime.auth-info-file",
+      "title": "Exported auth-info file",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "exportAuthInfo is false in the production config; the verification harness enables it on purpose (present for the harness) and scripts/build.sh refuses to package with it",
+      "durationMs": 0
+    },
+    {
+      "suite": "native",
+      "id": "native.go.fsops.TestWriteExportMode0600",
+      "title": "Exports are written with mode 0600",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "fsops: TestWriteExportMode0600 pass in 0.02s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.keychain.TestNonBiometricRoundTrip",
+      "title": "Keychain round trip (non-biometric item)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "keychain: TestNonBiometricRoundTrip pass in 0.10s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.github.com/passvault/desktop-helper/cmd/pv-helper.TestEndToEndWindowClose",
+      "title": "Helper exits when the window closes (no orphan process)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "github.com/passvault/desktop-helper/cmd/pv-helper: TestEndToEndWindowClose pass in 0.03s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestHelloCapabilities",
+      "title": "IPC handshake advertises only the implemented capabilities",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestHelloCapabilities pass in 0.03s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.fsops.TestWriteExportRefusals",
+      "title": "Exports refuse traversal, symlinks, special files and non-absolute paths",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "fsops: TestWriteExportRefusals pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.fsops.TestReadImport",
+      "title": "Imports read regular files only, with size limits",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "fsops: TestReadImport pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.links.TestOnlyWebLinksAreOpened",
+      "title": "Only Web Links Are Opened",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "links: TestOnlyWebLinksAreOpened pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestUnknownOpAndFields",
+      "title": "IPC refuses unknown operations and unknown fields",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestUnknownOpAndFields pass in 0.01s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.github.com/passvault/desktop-helper/cmd/pv-helper.TestEndToEndSocketClose",
+      "title": "Helper exits when the IPC socket closes (no orphan process)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "github.com/passvault/desktop-helper/cmd/pv-helper: TestEndToEndSocketClose pass in 0.00s",
+      "durationMs": 271
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestSessionBinding",
+      "title": "IPC requests are bound to the authenticated UI session",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestSessionBinding pass in 0.01s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.github.com/passvault/desktop-helper/cmd/pv-helper.TestBadBootstrap",
+      "title": "Helper refuses a malformed bootstrap message",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "github.com/passvault/desktop-helper/cmd/pv-helper: TestBadBootstrap pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestSecondHelloTearsDownConnections",
+      "title": "A second handshake tears down existing sessions (no session takeover)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestSecondHelloTearsDownConnections pass in 0.12s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.keychain.TestBiometricHonestOnUnsignedBuild",
+      "title": "Biometric unlock reports unavailability honestly on unsigned builds (no fake success)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "keychain: TestBiometricHonestOnUnsignedBuild pass in 0.01s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestInvalidHostsAndUsernamesRejected",
+      "title": "Invalid hosts and user names are refused before connecting",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestInvalidHostsAndUsernamesRejected pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestOversizeRejected",
+      "title": "Oversized IPC messages are refused",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestOversizeRejected pass in 0.01s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestVaultLockedClosesEverything",
+      "title": "Locking the vault closes every app-managed SSH session and stops agent signing",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestVaultLockedClosesEverything pass in 0.01s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestAgentSignFlowOverIPC",
+      "title": "Agent Sign Flow Over IPC",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestAgentSignFlowOverIPC pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.app.TestLogsContainNoSecrets",
+      "title": "Helper logs contain no secrets",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "app: TestLogsContainNoSecrets pass in 0.70s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.validate.TestHost",
+      "title": "Host names are validated strictly",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "validate: TestHost pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.validate.TestUsername",
+      "title": "User names are validated strictly",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "validate: TestUsername pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.validate.TestPortAccountID",
+      "title": "Ports and account ids are validated",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "validate: TestPortAccountID pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go.sysevents.TestDistributedNotificationForwarded",
+      "title": "System lock/sleep notifications reach the UI",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sysevents: TestDistributedNotificationForwarded pass in 0.00s",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.go-vet",
+      "title": "go vet finds nothing",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "clean",
+      "durationMs": 270
+    },
+    {
+      "suite": "native",
+      "id": "native.no-shell",
+      "title": "The helper starts no shell and runs exactly one external program (/usr/bin/open) with an argv list",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "process launches:\nnative/desktop-helper/internal/term/term.go:54:\tcmd := exec.Command(argv[0], argv[1:]...)\nshell invocations: 0",
+      "durationMs": 44
+    },
+    {
+      "suite": "native",
+      "id": "native.keychain.biometric-acl",
+      "title": "Biometric unlock material is protected by the Keychain access control (Touch ID enforced by the OS, not by a UI prompt)",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "biometric items: data-protection keychain + SecAccessControl(BiometryCurrentSet, WhenPasscodeSetThisDeviceOnly); no LAContext evaluatePolicy gate in code (the Keychain itself refuses reads without a fresh Touch ID match; re-enrolled fingers invalidate the item). The item holds a random device key that wraps the user key (wrapUserKeyForDevice).",
+      "durationMs": 0
+    },
+    {
+      "suite": "native",
+      "id": "native.keychain.biometric-runtime",
+      "title": "Touch ID prompt actually gates the stored key on real hardware",
+      "status": "unverified",
+      "severity": "medium",
+      "evidence": "needs a signed build with keychain-access-groups entitlement and a person to touch the sensor; procedure in docs/security/RUNBOOK.md (unsigned builds correctly report biometrics unavailable: TestBiometricHonestOnUnsignedBuild)",
+      "durationMs": 0
+    },
+    {
+      "suite": "native",
+      "id": "native.govulncheck",
+      "title": "govulncheck on the Go helper",
+      "status": "unverified",
+      "severity": "medium",
+      "evidence": "govulncheck not installed locally; runs in CI (security.yml)",
+      "durationMs": 0
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestUnknownHostKeyTrustThenShell",
+      "title": "Unknown host key: shown for confirmation, trusted only after explicit approval",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestUnknownHostKeyTrustThenShell pass in 0.02s",
+      "durationMs": 0
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestUnknownHostKeyReject",
+      "title": "Unknown host key rejected by the user → connection closed, nothing sent",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestUnknownHostKeyReject pass in 0.00s",
+      "durationMs": 0
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestHostKeyDecisionTimeout",
+      "title": "No host-key decision → connection aborted after the timeout",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestHostKeyDecisionTimeout pass in 0.20s",
+      "durationMs": 0
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestHostKeyMismatchAbortsBeforeAuth",
+      "title": "Host-key mismatch aborts BEFORE any credential is sent",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestHostKeyMismatchAbortsBeforeAuth pass in 0.00s",
+      "durationMs": 0
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestJumpHostBothHopsVerified",
+      "title": "Jump host: both hops are host-key verified",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestJumpHostBothHopsVerified pass in 0.01s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.term.TestScriptOnlyQuotedArgsNoSecrets",
+      "title": "External terminal: script contains only quoted, validated arguments and no secrets",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "term: TestScriptOnlyQuotedArgsNoSecrets pass in 0.01s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshkeys.TestGenerateAndInspectAllAlgorithms",
+      "title": "Key generation and inspection for all algorithms",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshkeys: TestGenerateAndInspectAllAlgorithms pass in 3.82s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestSocketPermissions",
+      "title": "Agent socket is 0600 inside a 0700 directory",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestSocketPermissions pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestStopRemovesSocketAndStaleSocketReplaced",
+      "title": "Stopping removes the socket; a stale socket is replaced safely",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestStopRemovesSocketAndStaleSocketReplaced pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestRefusesSymlinkDirAndRegularFile",
+      "title": "TestRefusesSymlinkDirAndRegularFile",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestRefusesSymlinkDirAndRegularFile pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestListOnlyWhenUnlocked",
+      "title": "Agent lists keys only while the vault is unlocked",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestListOnlyWhenUnlocked pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestJumpHostMismatchAborts",
+      "title": "Jump host: a mismatch on either hop aborts",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestJumpHostMismatchAborts pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestWrongPassword",
+      "title": "Wrong password fails cleanly",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestWrongPassword pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestSignApprovalDenyOnceTimed",
+      "title": "Per-use approval: deny, allow once, allow for a limited time",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestSignApprovalDenyOnceTimed pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestPublicKeyWithPassphrase",
+      "title": "Key with passphrase: wrong passphrase refused, right one works",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestPublicKeyWithPassphrase pass in 0.34s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestSignTimeoutDenies",
+      "title": "Unanswered signature requests are denied",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestSignTimeoutDenies pass in 0.20s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.term.TestRefusesWithoutTrustedKeys",
+      "title": "External terminal refuses hosts without verified host keys",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "term: TestRefusesWithoutTrustedKeys pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.term.TestRejectsInjection",
+      "title": "External terminal rejects injection-shaped parameters",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "term: TestRejectsInjection pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.term.TestCleanupWhenNeverStarted",
+      "title": "External terminal temp files are removed if the session never starts",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "term: TestCleanupWhenNeverStarted pass in 0.06s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestLockDeniesPending",
+      "title": "Locking denies pending signature requests",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestLockDeniesPending pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestMutationsRefused",
+      "title": "Agent refuses add/remove/lock requests from clients (keys cannot be exported or injected)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestMutationsRefused pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestSessionBind",
+      "title": "Forwarded-agent requests (session-bind) are refused",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestSessionBind pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.agentsrv.TestRealSSHAuthThroughAgent",
+      "title": "Real OpenSSH authentication through the agent works end to end",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "agentsrv: TestRealSSHAuthThroughAgent pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestKeyboardInteractiveMultiPrompt",
+      "title": "Keyboard-interactive (OTP) prompts are relayed to the user",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestKeyboardInteractiveMultiPrompt pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestKeyboardInteractiveCancel",
+      "title": "Cancelling an interactive prompt aborts the connection",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestKeyboardInteractiveCancel pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestRemoteExit",
+      "title": "Remote exit closes the session and frees resources",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestRemoteExit pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestCloseAllNoGoroutineLeak",
+      "title": "Closing all sessions leaks no goroutines",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestCloseAllNoGoroutineLeak pass in 0.03s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestAgentAuthUsesHelperKeys",
+      "title": "SSH auth through the PassVault agent uses only helper-held keys",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestAgentAuthUsesHelperKeys pass in 0.00s",
+      "durationMs": 1
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestSSHTest",
+      "title": "Connection test performs host-key verification",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestSSHTest pass in 0.00s",
+      "durationMs": 2
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshconn.TestValidationRejectsInjection",
+      "title": "TestValidationRejectsInjection",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshconn: TestValidationRejectsInjection pass in 0.00s",
+      "durationMs": 2
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.go.sshkeys.TestInspectRejects",
+      "title": "Malformed / unsupported key material is rejected",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "sshkeys: TestInspectRejects pass in 0.00s",
+      "durationMs": 2
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.terminal.config",
+      "title": "Embedded terminal: no clipboard (OSC 52) addon, no proposed APIs, links only http(s) and only after confirmation",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "xterm-host.ts: allowProposedApi false; no clipboard addon; OSC 8 linkHandler with allowNonHttpProtocols false; plain-text links → openLink → openExternalConfirmed (http/https only, user confirmation)",
+      "durationMs": 2
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.terminal.malicious-output",
+      "title": "Hostile terminal output (OSC 52, OSC 8 javascript:/file:, title, DCS, window ops) causes no clipboard write, navigation, script or link activation",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "8 hostile sequences written; privileged effects: none; script flag: null; page title unchanged: true; auto-replies sent back to the server: reply:\"\\u001bP1$r0m\\u001b\\\\\"",
+      "durationMs": 958
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.secrets-in-argv",
+      "title": "SSH secrets in process arguments",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "app-managed sessions use golang.org/x/crypto/ssh in-process (no ssh binary); external Terminal sessions: see ssh.go.term.TestScriptOnlyQuotedArgsNoSecrets",
+      "durationMs": 0
+    },
+    {
+      "suite": "ssh",
+      "id": "ssh.agent-destination",
+      "title": "Agent identifies the destination host",
+      "status": "not_applicable",
+      "severity": "info",
+      "evidence": "by design the agent cannot reliably know the destination; the approval prompt shows a verified host-key fingerprint only when OpenSSH sends session-bind data, and forwarded requests are refused (documented in DESKTOP.md)",
+      "durationMs": 0
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.lockfile",
+      "title": "The lockfile is consistent with every package.json (frozen install changes nothing)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "frozen offline install exit 0; lockfile unchanged by the install: true",
+      "durationMs": 916
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.npm-audit",
+      "title": "No high or critical advisories in production npm dependencies (pnpm audit)",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "counts {\"info\":0,\"low\":0,\"moderate\":0,\"high\":0,\"critical\":0}\n(severity from the advisory database; reachability not assessed)",
+      "durationMs": 1432
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.secrets.tracked-files",
+      "title": "No credentials, private keys or real .env files in tracked files",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "380 tracked files; .env files: none; pattern hits: none",
+      "durationMs": 69
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.secrets.history",
+      "title": "No credentials or private keys anywhere in git history",
+      "status": "pass",
+      "severity": "critical",
+      "evidence": "422 file changes scanned; hits: none",
+      "durationMs": 213
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.private-domain",
+      "title": "The private production domain is not committed (it lives only in gitignored env files / CI variables)",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "tracked files containing it: 0; commits that added/removed it: 0",
+      "durationMs": 121
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.secrets.build-artifacts",
+      "title": "Built artifacts (web, extension, desktop UI) contain no secret patterns",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "26 files in web-dist, ext-prod, ext-local, desktop-ui; hits: none",
+      "durationMs": 72
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.gitleaks",
+      "title": "gitleaks secret scan",
+      "status": "unverified",
+      "severity": "medium",
+      "evidence": "gitleaks not installed locally; runs in CI (security.yml); the built-in scanner above ran instead",
+      "durationMs": 0
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.inventory",
+      "title": "Dependency inventory generated; production npm licenses are permissive",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "202 npm production packages, 7 Go modules → dependency-inventory.json; non-permissive/unknown: none",
+      "durationMs": 416
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.sbom",
+      "title": "Standard-format SBOM (CycloneDX/SPDX)",
+      "status": "unverified",
+      "severity": "medium",
+      "evidence": "syft not installed locally; generated in CI (security.yml, anchore/sbom-action). The JSON inventory above is not a standard SBOM.",
+      "durationMs": 0
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.ci.least-privilege",
+      "title": "Workflows: read-only default token, no pull_request_target, release secrets only in tag/manual-triggered jobs",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "ci.yml: top-level permissions contents: read jobs: typescript: runs-on: ubuntu-24.04 services: postgres: image: docker.io/library/postgres:16-alpine env: POSTGRES_USER: passvault POSTGRES_PASSWORD: ci-only-not-a-secret POSTGRES_DB: passvault_test ports: ['5432:5432'] options: >- --health-cmd \"pg_isready -U passvault\" --health-interval 5s --health-timeout 5s --health-retries 10 env: DATABASE_URL: postgresql://passvault:ci-only-not-a-secret@127.0.0.1:5432/passvault_test TEST_DATABASE_URL: postgresql://passvault:ci-only-not-a-secret@127.0.0.1:5432/passvault_test steps: - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 with: version: 10.12.1 - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0 with: node-version: 22 cache: pnpm - run: pnpm install --frozen-lockfile - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build - name: Typecheck run: pnpm --filter @passvault/api prisma:generate && pnpm -r run typecheck - name: Unit tests (crypto, validation, env-parser, sync, vault-core, extension, desktop) run: pnpm -r --workspace-concurrency=1 --filter './packages/*' --filter @passvault/browser-extension --filter @passvault/desktop run test - name: API e2e tests (real Postgres) run: pnpm --filter @passvault/api test - name: Build web and extension run: pnpm --filter @passvault/web build && pnpm --filter @passvault/browser-extension build - name: Dependency audit (fails on high/critical; see docs/security/FINDINGS.md for the policy) run: pnpm audit --prod --audit-level=high native-helper: runs-on: macos-14 steps: - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0 with: go-version: '1.25' cache-dependency-path: native/desktop-helper/go.sum - name: Vet and test (keychain tests skipped on CI runners) working-directory: native/desktop-helper env: PV_SKIP_KEYCHAIN_TESTS: '1' run: | go vet ./... go test -race ./... - name: Universal build working-directory: native/desktop-helper run: make universal && lipo -info bin/pv-helper-universal secrets-scan: runs-on: ubuntu-24.04 steps: - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 with: fetch-depth: 0 - name: Refuse committed env files and private keys run: | if git ls-files | grep -E '(^|/)\\.env($|\\.)' | grep -vE '\\.example$'; then echo \"Committed .env file\"; exit 1; fi if git grep -nE 'BEGIN (OPENSSH|RSA|EC|DSA) PRIVATE KEY' -- ':!**/test/**' ':!**/*_test.go' ':!docs/**'; then echo \"Private key committed\"; exit 1; fi; pull_request_target false; secrets reachable from PRs false\nrelease.yml: top-level permissions contents: read concurrency: group: release-${{ github.ref }} cancel-in-progress: false env: TAG: ${{ github.event.inputs.tag || github.ref_name }} jobs: verify: name: Verify versions and run tests runs-on: ubuntu-24.04 outputs: version: ${{ steps.v.outputs.version }} prerelease: ${{ steps.v.outputs.prerelease }} steps: - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 - id: v name: Tag must match package versions run: | version=\"${TAG#v}\" for p in apps/desktop/package.json apps/browser-extension/package.json; do pv=$(node -p \"require('./$p').version\") [ \"$pv\" = \"$version\" ] || { echo \"::error::$p is $pv but the tag is $TAG\"; exit 1; } done echo \"version=$version\" >> \"$GITHUB_OUTPUT\" case \"$version\" in *-*) echo \"prerelease=true\" >> \"$GITHUB_OUTPUT\" ;; *) echo \"prerelease=false\" >> \"$GITHUB_OUTPUT\" ;; esac - name: Production URL is configured env: PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }} run: | case \"$PV_PRODUCTION_URL\" in https://*) ;; *) echo \"::error::Set the repository variable PV_PRODUCTION_URL to your https server URL\"; exit 1 ;; esac - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 with: version: 10.12.1 - uses: actions/setup-node@49933ea5288caeca… (12786 more chars)",
+      "durationMs": 0
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.ci.actions-pinned",
+      "title": "Third-party GitHub Actions are pinned to full commit SHAs",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "37 action references; not SHA-pinned: 0",
+      "finding": "PV-SEC-003",
+      "durationMs": 1
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.ci.actionlint",
+      "title": "actionlint finds no workflow errors",
+      "status": "pass",
+      "severity": "low",
+      "evidence": "3 workflows clean",
+      "durationMs": 269
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.ci.security-gate",
+      "title": "CI runs the security gate (audit fails on high/critical, secret scan, govulncheck, harness offline suites)",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "security.yml: audit (high), gitleaks, govulncheck, harness offline suites",
+      "finding": "PV-SEC-005",
+      "durationMs": 0
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.containers",
+      "title": "Containers: API non-root, read-only, no capabilities, no-new-privileges; database not published; ports bound to loopback",
+      "status": "pass",
+      "severity": "high",
+      "evidence": "api: read_only, cap_drop ALL, no-new-privileges; postgres not published; host ports on 127.0.0.1; Containerfile USER node. Base images pinned by digest: false (tags only — see residual risks)",
+      "durationMs": 0
+    },
+    {
+      "suite": "supply-chain",
+      "id": "sc.release.authenticity",
+      "title": "Desktop releases: signed + notarized when credentials exist, otherwise explicitly UNSIGNED; checksums published; no auto-updater to hijack",
+      "status": "pass",
+      "severity": "medium",
+      "evidence": "release.yml: notarization step true, UNSIGNED labelling true, SHA256SUMS true; update mechanism in the app: none (users install new versions manually)",
+      "durationMs": 28
+    }
+  ]
+}

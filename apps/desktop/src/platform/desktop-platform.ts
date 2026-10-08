@@ -166,7 +166,7 @@ export function createDesktopPlatform(d: DesktopPlatformDeps): Platform {
     files: helperFiles(d.nl, d.helper),
     biometrics: helperBiometrics(d.helper),
     async openExternal(url) {
-      await openExternalConfirmed(url, { confirm: d.confirmLink, open: (u) => d.nl.os.open(u) });
+      await openExternalConfirmed(url, { confirm: d.confirmLink, open: (u) => d.helper.request('link.open', { url: u }) });
     },
   };
 }

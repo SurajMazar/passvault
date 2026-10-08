@@ -74,7 +74,7 @@ Source layout (`apps/desktop/src`):
 | Web content → native | Only the bundled UI is loaded (`documentRoot: /resources/app/`, `url: /`). CSP forbids remote scripts, frames, plugins. `nativeAllowList` limits what even injected script could call. No `os.execCommand`, `os.spawnProcess`, `filesystem.*`, `net.*`, `window.create`. |
 | Other local processes → Neutralino | Server binds 127.0.0.1. Native calls need `NL_TOKEN`; one-time token security and `exportAuthInfo: false`. The helper connects with a per-launch connect token (an imposter on the port is rejected: verified when a second instance held the port, the helper got `connect_failed`). |
 | UI → helper | Fixed op set, strict decoding (unknown fields rejected), validation, 128-bit session id bound to every request; events of a stale session are dropped by the UI. |
-| Remote SSH server → UI | Terminal output is untrusted: xterm only, no clipboard (OSC 52) addon, links go through a confirm dialog and only http(s) reach `os.open`. Server prompt text is rendered as plain text. |
+| Remote SSH server → UI | Terminal output is untrusted: xterm only, no clipboard (OSC 52) addon, links go through a confirm dialog and only http(s) reach the helper's `link.open` (no shell). Server prompt text is rendered as plain text. |
 | Helper → OS | Secrets only in IPC messages, never in argv/env/files; see DESKTOP_HELPER.md. |
 
 Residual risks: same-user malware that can attach to or inject into the processes,
@@ -91,28 +91,30 @@ PassVault starts can read or spoof data. A signed, hardened-runtime build withou
 | `app.exit` | quit after window close / ⌘Q / menu-bar Quit |
 | `app.broadcast` | used by the **helper** to deliver `pv.response` / `pv.event` |
 | `window.show`, `window.focus`, `window.unminimize` | bring the window forward (menu-bar "Open", agent sign requests, host-key mismatch) |
-| `window.hide`, `window.isVisible` | reserved for menu-bar behaviour (not secret-bearing) |
 | `window.setMainMenu` | macOS main menu: Edit menu (⌘C/⌘V/⌘X/⌘A/⌘Z in WKWebView), Lock, Quit |
 | `os.showOpenDialog` | choose a file to import (contents are read by the helper's `fs.readImport`) |
 | `os.showSaveDialog` | choose an export destination (written by the helper's `fs.writeExport`, 0600) |
-| `os.showMessageBox` | reserved for fatal-error reporting |
-| `os.open` | open a confirmed http(s) link in the default browser |
 | `os.setTray` | menu-bar menu: Open PassVault, Lock vault, Quit |
 | `extensions.dispatch` | UI → helper requests |
 | `extensions.getStats` | detect whether the helper is loaded/connected (also used by the client library) |
 | `storage.getData`, `storage.setData`, `storage.removeData` | non-secret prefs + ciphertext-only offline cache |
 | `clipboard.readText`, `clipboard.writeText` | copy, and auto-clear only if the clipboard is unchanged |
-| `computer.getOSInfo` | reserved for diagnostics |
 
-Not allowed: `os.execCommand`, `os.spawnProcess`, `os.getEnv(s)`, `os.setEnv`, all
+Not allowed: `os.open`, `os.execCommand`, `os.spawnProcess`, `os.getEnv(s)`, `os.setEnv`, all
 `filesystem.*`, `net.*`, `resources.*`, `server.*`, `custom.*`, `debug.log`,
 `window.snapshot`, `clipboard.*Image/HTML`, `storage.getKeys/clear`, `updater`.
 
-**Neutralino finding:** `os.open` on macOS runs `open "<url>"` through `/bin/sh`.
-WHATWG URL serialisation keeps `$` and backticks in query strings, so a crafted
-URL could run shell commands. `platform/links.ts` therefore (1) only accepts
-http(s), (2) asks the user, and (3) percent-encodes every character outside a
-conservative URL set before calling `os.open` (tested).
+**Links are opened by the helper, not by Neutralino.** `os.open` on macOS runs
+`open "<url>"` through `/bin/sh`; with `os.open` on the allowlist, any script
+that ever ran in the webview could have used it to run shell commands
+(security finding PV-SEC-002, see [security/FINDINGS.md](security/FINDINGS.md)).
+External links now go: `platform/links.ts` (http/https only, user confirmation,
+percent-encoding) → helper op `link.open` (validated again in Go:
+http/https with a host, no credentials, no whitespace/control characters) →
+`/usr/bin/open <url>` with an argv list, no shell. `os.open` and the unused
+`window.hide`, `window.isVisible`, `os.showMessageBox` and `computer.getOSInfo`
+were removed from the allowlist; a unit test and the security harness keep it
+that way (and also require `app.broadcast`, which the helper needs).
 
 ## Content Security Policy
 
@@ -131,7 +133,7 @@ object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'
 - The Neutralino client connects to `ws://localhost:47391` (the page origin's host).
 - `__neutralino_globals.js` is same-origin. Vite emits no inline scripts (`assetsInlineLimit: 0`).
 - Server headers add `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
-- `window.newWindowPolicy: "custom"`: `target=_blank` requests raise `newWindowRequest` and go through the same confirm-then-`os.open` path.
+- `window.newWindowPolicy: "custom"`: `target=_blank` requests raise `newWindowRequest` and go through the same confirm-then-`link.open` path.
 - Dropped files never navigate the webview. The page context menu (which offers Reload, and a reload loses the one-time token) is disabled except in text fields, selections and the terminal.
 
 ## What is stored where
@@ -195,7 +197,7 @@ in the Desktop app settings and after opening an external session.
   - the helper uses a generated `ssh_config` (`-F`), which replaces `~/.ssh/config` for that session.
 - **Terminal safety:**
   - no clipboard/OSC 52 addon, and `allowProposedApi: false`;
-  - plain URLs (WebLinksAddon) and OSC 8 hyperlinks (`linkHandler`) go to a confirm dialog, then `os.open`, and only for http(s);
+  - plain URLs (WebLinksAddon) and OSC 8 hyperlinks (`linkHandler`) go to a confirm dialog, then the helper's `link.open`, and only for http(s);
   - a capture-phase paste listener requires confirmation for pastes with line breaks (showing the line count and first lines) or control characters (stripped before `term.paste`);
   - ⌘T/⌘W are never sent to the PTY;
   - saved commands are never run;

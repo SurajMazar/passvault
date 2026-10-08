@@ -65,6 +65,7 @@ cd native/desktop-helper && make test
 |---|---|
 | Architecture & capability matrix | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Threat model | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) |
+| **Security harness, findings, residual risks** | [docs/security/HARNESS.md](docs/security/HARNESS.md), [REPORT](docs/security/REPORT.md), [FINDINGS](docs/security/FINDINGS.md), [RESIDUAL_RISKS](docs/security/RESIDUAL_RISKS.md) |
 | Encryption & key management | [docs/CRYPTO.md](docs/CRYPTO.md) |
 | Data model & server-visible metadata | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) |
 | API contracts | [docs/API.md](docs/API.md) |

@@ -1,0 +1,42 @@
+{
+  "name": "@passvault/security-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Security verification harness: disposable stack, synthetic actors, security suites, machine-readable results",
+  "scripts": {
+    "security": "tsx src/run.ts",
+    "security:auth": "tsx src/run.ts auth",
+    "security:authorization": "tsx src/run.ts authorization",
+    "security:crypto": "tsx src/run.ts crypto",
+    "security:sharing": "tsx src/run.ts sharing",
+    "security:sync": "tsx src/run.ts sync",
+    "security:web": "tsx src/run.ts web",
+    "security:extension": "tsx src/run.ts extension",
+    "security:desktop": "tsx src/run.ts desktop",
+    "security:native": "tsx src/run.ts native",
+    "security:ssh": "tsx src/run.ts ssh",
+    "security:env-files": "tsx src/run.ts env-files",
+    "security:leakage": "tsx src/run.ts leakage",
+    "security:supply-chain": "tsx src/run.ts supply-chain",
+    "stack:up": "tsx src/stack-cli.ts up",
+    "stack:down": "tsx src/stack-cli.ts down",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@passvault/crypto": "workspace:*",
+    "@passvault/env-parser": "workspace:*",
+    "@passvault/sync": "workspace:*",
+    "@passvault/types": "workspace:*",
+    "@passvault/vault-core": "workspace:*",
+    "@types/node": "22.20.5",
+    "hash-wasm": "4.12.0",
+    "otpauth": "9.5.2",
+    "playwright": "1.64.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

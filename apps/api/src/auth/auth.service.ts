@@ -16,6 +16,7 @@ import { accountBundle, deviceTrusted, sessionDto } from '../common/dto';
 import { addMinutes, maskEmail, randomToken, safeEqualHex, sha256Hex } from '../common/util';
 import { MfaService } from './mfa.service';
 import { SessionService } from './session.service';
+import { UnknownAccountLockout } from './unknown-account-lockout.service';
 import type { AuthContext, RequestMeta } from './auth.types';
 
 export const REGISTRATION_CODE_TTL_MINUTES = 15;
@@ -40,6 +41,7 @@ export class AuthService {
     private readonly limiter: EmailLimiter,
     private readonly mfa: MfaService,
     private readonly sessions: SessionService,
+    private readonly unknownLockout: UnknownAccountLockout,
   ) {}
 
   // ---------------------------------------------------------------- prelogin
@@ -189,7 +191,10 @@ export class AuthService {
     this.limiter.hit('login', body.email);
     const user = await this.prisma.user.findUnique({ where: { email: body.email } });
     if (!user) {
+      // Answer exactly like a real account would, including its lockout (PV-SEC-001).
       this.hasher.verifyDummy(body.authKey);
+      if (this.unknownLockout.isLocked(body.email)) throw E.rateLimited('Too many failed attempts; try again later');
+      this.unknownLockout.recordFailure(body.email);
       this.logger.warn({ emailHint: maskEmail(body.email) }, 'login failed (unknown account)');
       throw E.invalidCredentials();
     }

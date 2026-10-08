@@ -15,7 +15,7 @@ function fakeNl(overrides: Partial<NeutralinoLike> = {}): NeutralinoLike {
     extensions: { dispatch: async () => undefined, getStats: async () => ({ loaded: [], connected: [] }) },
     app: { exit: async () => undefined },
     window: { show: async () => undefined, focus: async () => undefined, unminimize: async () => undefined, setMainMenu: async () => undefined },
-    os: { showOpenDialog: async () => [], showSaveDialog: async () => '', open: async () => undefined, setTray: async () => undefined },
+    os: { showOpenDialog: async () => [], showSaveDialog: async () => '', setTray: async () => undefined },
     storage: {
       getData: async (k) => {
         if (!store.has(k)) throw { code: 'NE_ST_NOSTKEX', message: 'no key' };
@@ -25,7 +25,6 @@ function fakeNl(overrides: Partial<NeutralinoLike> = {}): NeutralinoLike {
       removeData: async (k) => void store.delete(k),
     },
     clipboard: { readText: async () => clip, writeText: async (t) => void (clip = t) },
-    computer: { getOSInfo: async () => ({ name: 'Darwin', version: '26' }) },
     ...overrides,
   };
 }
@@ -124,7 +123,7 @@ describe('session token in the Keychain', () => {
 describe('file export', () => {
   it('writes owner-only and overwrites only after the save panel confirmed replacing', async () => {
     const { t, h } = await readyHelper();
-    const files = helperFiles(fakeNl({ os: { showOpenDialog: async () => [], showSaveDialog: async () => '/Users/me/export.json', open: async () => undefined, setTray: async () => undefined } }), h);
+    const files = helperFiles(fakeNl({ os: { showOpenDialog: async () => [], showSaveDialog: async () => '/Users/me/export.json', setTray: async () => undefined } }), h);
     const p = files.saveTextFile({ suggestedName: 'export.json', text: 'secret data' });
     await new Promise((r) => setTimeout(r, 0));
     const first = t.last('fs.writeExport')!;
@@ -140,7 +139,7 @@ describe('file export', () => {
 
   it('other write errors are not retried with overwrite', async () => {
     const { t, h } = await readyHelper();
-    const files = helperFiles(fakeNl({ os: { showOpenDialog: async () => [], showSaveDialog: async () => '/x/link', open: async () => undefined, setTray: async () => undefined } }), h);
+    const files = helperFiles(fakeNl({ os: { showOpenDialog: async () => [], showSaveDialog: async () => '/x/link', setTray: async () => undefined } }), h);
     const p = files.saveTextFile({ suggestedName: 'a', text: 'b' });
     await new Promise((r) => setTimeout(r, 0));
     t.error(t.last('fs.writeExport')!, 'denied', 'target is a symlink');
@@ -153,5 +152,34 @@ describe('file export', () => {
     const files = helperFiles(fakeNl(), h);
     await expect(files.saveTextFile({ suggestedName: 'a', text: 'b' })).resolves.toEqual({ saved: false });
     expect(t.ops()).not.toContain('fs.writeExport');
+  });
+});
+
+describe('external links (PV-SEC-002)', () => {
+  it('opens confirmed http(s) links through the helper, never through a webview native API', async () => {
+    const { t, h } = await readyHelper();
+    let confirmed = 0;
+    const p = createDesktopPlatform({ nl: fakeNl(), helper: h, apiBaseUrl: 'http://x', webAppUrl: 'http://y', deviceName: 'd', clipboard: new DesktopClipboard({ readText: async () => '', writeText: async () => undefined }), confirmLink: async () => (confirmed++, true) });
+    const opened = p.openExternal('https://example.com/a?b=$(id)');
+    await new Promise((r) => setTimeout(r, 0));
+    const req = t.last('link.open')!;
+    expect(req.params).toEqual({ url: 'https://example.com/a?b=%24(id)' });
+    t.reply(req, null);
+    await opened;
+    expect(confirmed).toBe(1);
+    await expect(p.openExternal('file:///etc/passwd')).rejects.toThrow(/Only http/);
+    expect(t.ops().filter((o) => o === 'link.open')).toHaveLength(1);
+  });
+
+  it('the webview native allowlist has no shell-backed or unused APIs', async () => {
+    const { readFileSync } = await import('node:fs');
+    const cfg = JSON.parse(readFileSync(new URL('../neutralino.config.json', import.meta.url), 'utf8')) as { nativeAllowList: string[] };
+    for (const banned of ['os.open', 'os.execCommand', 'os.spawnProcess', 'os.showMessageBox', 'computer.getOSInfo']) {
+      expect(cfg.nativeAllowList).not.toContain(banned);
+    }
+    // The helper (an extension) answers the UI through app.broadcast; removing it breaks every helper call.
+    expect(cfg.nativeAllowList).toContain('app.broadcast');
+    expect(cfg.nativeAllowList).toContain('extensions.dispatch');
+    expect(cfg.nativeAllowList.some((a) => a.startsWith('filesystem.'))).toBe(false);
   });
 });
