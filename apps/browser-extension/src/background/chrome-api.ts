@@ -29,6 +29,8 @@ export interface SenderLike {
 }
 
 export interface ChromeLike {
+  /** toolbar popup (inline menu: "Unlock" opens it when Chrome allows) */
+  action?: { openPopup?(): Promise<void> };
   runtime: {
     id: string;
     getURL(path: string): string;

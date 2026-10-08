@@ -19,6 +19,8 @@ import type { ChromeLike, SenderLike } from './chrome-api';
 
 export const AUTOSAVE_ENABLED_KEY = 'pv.autoSave.enabled';
 export const NEVER_SAVE_KEY = 'pv.autoSave.never';
+/** Inline suggestions in login fields (inline-menu.ts): false = turned off; on by default with all-sites access. */
+export const INLINE_ENABLED_KEY = 'pv.inline.enabled';
 export const PENDING_KEY = 'pv.autoSave.pending';
 export const NOTE_MAX = 2000;
 export const CONTENT_SCRIPT_ID = 'pv-save-prompt';
@@ -79,18 +81,29 @@ export class SavePromptManager {
 
   // ---------------------------------------------------------------- settings
 
-  async status(): Promise<{ enabled: boolean; permission: boolean; neverCount: number }> {
-    const s = await this.c.storage.local.get([AUTOSAVE_ENABLED_KEY, NEVER_SAVE_KEY]);
+  async status(): Promise<{ enabled: boolean; inline: boolean; permission: boolean; neverCount: number }> {
+    const s = await this.c.storage.local.get([AUTOSAVE_ENABLED_KEY, NEVER_SAVE_KEY, INLINE_ENABLED_KEY]);
     const permission = (await this.c.permissions?.contains({ origins: AUTOSAVE_ORIGINS })) ?? false;
-    return { enabled: s[AUTOSAVE_ENABLED_KEY] === true && permission, permission, neverCount: ((s[NEVER_SAVE_KEY] as string[] | undefined) ?? []).length };
+    return {
+      enabled: s[AUTOSAVE_ENABLED_KEY] === true && permission,
+      inline: s[INLINE_ENABLED_KEY] !== false && permission,
+      permission,
+      neverCount: ((s[NEVER_SAVE_KEY] as string[] | undefined) ?? []).length,
+    };
   }
 
   /** Called after the popup obtained (or the user removed) the optional host permission. */
-  async setEnabled(enabled: boolean): Promise<{ enabled: boolean; permission: boolean; neverCount: number }> {
+  async setEnabled(enabled: boolean): Promise<{ enabled: boolean; inline: boolean; permission: boolean; neverCount: number }> {
     const permission = (await this.c.permissions?.contains({ origins: AUTOSAVE_ORIGINS })) ?? false;
-    const on = enabled && permission;
-    await this.c.storage.local.set({ [AUTOSAVE_ENABLED_KEY]: on });
-    await this.syncRegistration(on);
+    await this.c.storage.local.set({ [AUTOSAVE_ENABLED_KEY]: enabled && permission });
+    await this.syncRegistration();
+    return this.status();
+  }
+
+  /** Inline suggestions in login fields (same content script and permission). */
+  async setInline(enabled: boolean): Promise<{ enabled: boolean; inline: boolean; permission: boolean; neverCount: number }> {
+    await this.c.storage.local.set({ [INLINE_ENABLED_KEY]: enabled });
+    await this.syncRegistration();
     return this.status();
   }
 
@@ -99,11 +112,12 @@ export class SavePromptManager {
     return this.status();
   }
 
-  /** Keep the dynamic content script registration consistent with the setting and permission. */
-  async syncRegistration(want?: boolean): Promise<void> {
+  /** Keep the dynamic content script registration consistent with the settings and permission. */
+  async syncRegistration(): Promise<void> {
     const scripting = this.c.scripting;
     if (!scripting.registerContentScripts || !scripting.getRegisteredContentScripts || !scripting.unregisterContentScripts) return;
-    const enabled = want ?? (await this.status()).enabled;
+    const st = await this.status();
+    const enabled = st.enabled || st.inline;
     const existing = await scripting.getRegisteredContentScripts({ ids: [CONTENT_SCRIPT_ID] });
     if (enabled && existing.length === 0) {
       await scripting.registerContentScripts([

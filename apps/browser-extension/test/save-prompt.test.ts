@@ -56,6 +56,10 @@ describe('offer to save: setting and registration', () => {
     expect(st.enabled).toBe(true);
     expect(env.registered.get(CONTENT_SCRIPT_ID)).toMatchObject({ matches: AUTOSAVE_ORIGINS, js: ['save-prompt.js'], allFrames: false });
     await env.popup({ type: 'autosave.set', enabled: false });
+    // inline suggestions (on by default with the permission) still need the content script
+    expect(env.registered.size).toBe(1);
+    const off = unwrap<{ enabled: boolean; inline: boolean }>(await env.popup({ type: 'inline.set', enabled: false }));
+    expect(off).toMatchObject({ enabled: false, inline: false });
     expect(env.registered.size).toBe(0);
   });
 

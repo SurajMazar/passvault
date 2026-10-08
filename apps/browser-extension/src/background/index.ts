@@ -14,6 +14,7 @@ import { createLogger } from './log';
 import { createExtensionPlatform, tokenKey } from './platform';
 import { checkSender } from './sender';
 import { SavePromptManager } from './save-prompt';
+import { InlineMenuManager, isInlineMessage } from './inline-menu';
 import { ServerManager, defaultServer, loadProfiles, migrateLegacyStorage, serverScope, webUrlFor } from './servers';
 
 const c = chrome as unknown as ChromeLike;
@@ -26,6 +27,7 @@ interface Runtime {
   session: VaultSession;
   controller: BackgroundController;
   savePrompt: SavePromptManager;
+  inline: InlineMenuManager;
 }
 
 /** Everything bound to one server. Changing servers replaces the whole runtime. */
@@ -35,7 +37,8 @@ function boot(server: string, servers: ServerManager): Runtime {
   const platform = createExtensionPlatform(c, { apiBaseUrl: server, webAppUrl: webUrl, scope });
   const session = new VaultSession(platform);
   // Never offer to save passwords typed into PassVault's own pages.
-  const savePrompt = new SavePromptManager(c, session, [...new Set([new URL(webUrl).origin, new URL(server).origin])]);
+  const own = [...new Set([new URL(webUrl).origin, new URL(server).origin])];
+  const savePrompt = new SavePromptManager(c, session, own);
   const controller = new BackgroundController({
     chrome: c,
     session,
@@ -45,9 +48,10 @@ function boot(server: string, servers: ServerManager): Runtime {
     tokenKey: tokenKey(scope),
     server: servers,
   });
+  const inline = new InlineMenuManager(c, session, own, { matches: (tabId) => controller.matches(tabId), fill: (tabId, id, insecure) => controller.fill(tabId, id, insecure) });
   void savePrompt.syncRegistration().catch(() => log('autosave registration failed'));
   controller.ready.catch(() => log('startup failed'));
-  return { server, session, controller, savePrompt };
+  return { server, session, controller, savePrompt, inline };
 }
 
 /**
@@ -105,7 +109,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   void current.then((rt): Promise<unknown> =>
     // Messages from web-page tabs can only be the opt-in save-prompt content script;
     // they are handled (and validated) separately and never reach privileged handlers.
-    sender.tab ? rt.savePrompt.handle(message, sender).catch(() => null) : rt.controller.handleMessage(message, sender),
+    sender.tab
+      ? (isInlineMessage(message) ? rt.inline.handle(message, sender) : rt.savePrompt.handle(message, sender)).catch(() => null)
+      : rt.controller.handleMessage(message, sender),
   ).then(sendResponse, () => sendResponse(null));
   return true; // async response
 });
@@ -134,6 +140,8 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.tabs.onRemoved.addListener((tabId) => void current.then((rt) => rt.savePrompt.onTabRemoved(tabId)));
 // If the user revokes the optional all-sites permission in chrome://extensions, stop prompting.
 chrome.permissions.onRemoved.addListener(() => void current.then((rt) => rt.savePrompt.syncRegistration()).catch(() => undefined));
+// Granting all-sites access turns on inline suggestions (on by default) without a restart.
+chrome.permissions.onAdded.addListener(() => void current.then((rt) => rt.savePrompt.syncRegistration()).catch(() => undefined));
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   void current.then((rt) => rt.controller.onAlarm(alarm));

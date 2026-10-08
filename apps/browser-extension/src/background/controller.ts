@@ -80,7 +80,7 @@ export interface ControllerDeps {
   session: SessionLike;
   webUrl: string;
   /** opt-in "offer to save passwords" feature (content-script side is in save-prompt.ts) */
-  savePrompt?: Pick<SavePromptManager, 'status' | 'setEnabled' | 'clearNeverList' | 'clearAll'>;
+  savePrompt?: Pick<SavePromptManager, 'status' | 'setEnabled' | 'setInline' | 'clearNeverList' | 'clearAll'>;
   /** Logger that receives only fixed strings and codes — never payloads. */
   log?: (event: string, detail?: string) => void;
   /** storage key of this server's session token (default: the legacy global key) */
@@ -561,6 +561,8 @@ export class BackgroundController {
         return this.autosave().setEnabled(req.enabled);
       case 'autosave.clearNever':
         return this.autosave().clearNeverList();
+      case 'inline.set':
+        return this.autosave().setInline(req.enabled);
       case 'server.check':
         return (await this.servers().check(req.url)) satisfies ResponseMap['server.check'];
       case 'server.set':
@@ -617,7 +619,8 @@ export class BackgroundController {
     return { origin, host: u.host, eligible: true, insecure: u.protocol === 'http:' };
   }
 
-  private async matches(tabId: number): Promise<MatchesResponse> {
+  /** Logins saved for the tab's current URL (popup list and inline suggestions). */
+  async matches(tabId: number): Promise<MatchesResponse> {
     const url = await this.tabUrl(tabId);
     const tab = this.tabInfo(url);
     const out: LoginMatch[] = [];
@@ -634,7 +637,8 @@ export class BackgroundController {
     return { tab, matches: out };
   }
 
-  private async fill(tabId: number, itemId: string, confirmInsecure: boolean): Promise<FillResponse> {
+  /** The one fill path (popup and inline suggestions): policy check on a fresh tab URL, then top-frame injection. */
+  async fill(tabId: number, itemId: string, confirmInsecure: boolean): Promise<FillResponse> {
     const item = this.session.getSnapshot().items.find((i) => i.id === itemId);
     // Re-read the tab URL right before filling; never trust an earlier lookup.
     const url = await this.tabUrl(tabId);

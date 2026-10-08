@@ -90,6 +90,7 @@ export const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('autosave.status') }).strict(),
   z.object({ type: z.literal('autosave.set'), enabled: z.boolean() }).strict(),
   z.object({ type: z.literal('autosave.clearNever') }).strict(),
+  z.object({ type: z.literal('inline.set'), enabled: z.boolean() }).strict(),
   // Server connection. The popup requests host access for an address first (Chrome
   // permission prompt). A new address is applied only after a successful
   // compatibility check; a saved server can be switched to offline (cached data).
@@ -278,6 +279,7 @@ export interface ResponseMap {
   'autosave.status': AutoSaveStatus;
   'autosave.set': AutoSaveStatus;
   'autosave.clearNever': AutoSaveStatus;
+  'inline.set': AutoSaveStatus;
   'server.check': ServerCheck;
   'server.set': { url: string };
   'server.switch': { url: string };
@@ -289,6 +291,8 @@ export interface ResponseMap {
 /** "Offer to save passwords" setting (requires the optional all-sites host permission). */
 export interface AutoSaveStatus {
   enabled: boolean;
+  /** suggestions in login fields (inline menu) */
+  inline: boolean;
   permission: boolean;
   neverCount: number;
 }

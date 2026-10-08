@@ -1,9 +1,11 @@
 /**
- * PassVault "offer to save" content script (opt-in).
+ * PassVault page content script: "offer to save" and inline suggestions in
+ * login fields.
  *
  * Registered with chrome.scripting.registerContentScripts only while the user
- * has enabled "Offer to save passwords" AND granted the optional host
- * permission. It runs in the extension's isolated world, top frame only.
+ * has granted the optional all-sites host permission and has "Offer to save
+ * passwords" or "Suggestions in login fields" on. It runs in the extension's
+ * isolated world, top frame only.
  *
  * What it does:
  *   1. When a login form is submitted (submit event, or Enter / click on a
@@ -213,6 +215,214 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
     document.documentElement.appendChild(host);
     setTimeout(() => (shadow.querySelector('.primary') as HTMLElement | null)?.focus({ preventScroll: true }), 50);
   }
+
+  // ------------------------------------------------------------ inline suggestions (login fields)
+  //
+  // Clicking into a login field shows the logins saved for this site (title and
+  // username only — the background never sends passwords here). Choosing one asks
+  // the background to fill through the popup's policy-checked fill path. Only
+  // trusted (user) input opens the menu or picks an entry.
+
+  type Suggestion = { id: string; title: string; username: string; insecure: boolean };
+  type SuggestResult = { show: false } | { show: true; locked: boolean; items: Suggestion[] };
+  type InlineResult = { ok: true } | { ok: false; message: string };
+
+  let menuHost: HTMLElement | null = null;
+  let menuField: HTMLInputElement | null = null;
+  let menuButtons: HTMLButtonElement[] = [];
+  let menuMsg: HTMLElement | null = null;
+  let activeIndex = -1;
+  let requestSeq = 0;
+
+  function isLoginField(el: EventTarget | null): el is HTMLInputElement {
+    if (!(el instanceof HTMLInputElement) || el.disabled || el.readOnly || !visible(el)) return false;
+    if (el.type === 'password') return true;
+    if (!TEXTISH.has(el.type)) return false;
+    const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
+    if (ac.split(/\s+/).includes('username')) return true;
+    const scope: ParentNode = el.form ?? document;
+    const hasPassword = Array.from(scope.querySelectorAll('input')).some((i) => i.type === 'password' && visible(i));
+    return hasPassword || (USERISH.test(`${el.name} ${el.id} ${ac}`) && el.type === 'email');
+  }
+
+  function closeMenu() {
+    menuHost?.remove();
+    menuHost = null;
+    menuField = null;
+    menuButtons = [];
+    menuMsg = null;
+    activeIndex = -1;
+  }
+
+  function position() {
+    if (!menuHost || !menuField) return;
+    if (!menuField.isConnected || !visible(menuField)) return closeMenu();
+    const r = menuField.getBoundingClientRect();
+    const width = Math.min(Math.max(r.width, 260), window.innerWidth - 16);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    menuHost.style.cssText = `all: initial; position: fixed; z-index: 2147483647; top: ${Math.round(r.bottom + 4)}px; left: ${Math.round(left)}px; width: ${Math.round(width)}px;`;
+  }
+
+  function setActive(i: number) {
+    if (!menuButtons.length) return;
+    activeIndex = (i + menuButtons.length) % menuButtons.length;
+    menuButtons.forEach((b, j) => b.classList.toggle('active', j === activeIndex));
+  }
+
+  function choose(btn: HTMLButtonElement) {
+    const id = btn.dataset.id;
+    if (btn.dataset.unlock) {
+      void send<InlineResult>({ type: 'inline.unlock' }).then((r) => {
+        if (r && !r.ok && menuMsg) menuMsg.textContent = r.message;
+        else closeMenu();
+      });
+      return;
+    }
+    if (!id) return;
+    void send<InlineResult>({ type: 'inline.fill', itemId: id }).then((r) => {
+      if (r && r.ok) return closeMenu();
+      if (menuMsg) menuMsg.textContent = r && !r.ok ? r.message : 'PassVault could not fill this page.';
+    });
+  }
+
+  function renderMenu(field: HTMLInputElement, res: Extract<SuggestResult, { show: true }>) {
+    closeMenu();
+    menuField = field;
+    menuHost = document.createElement('passvault-inline-menu');
+    const shadow = menuHost.attachShadow({ mode: 'closed' });
+    const style = document.createElement('style');
+    style.textContent = `
+      .menu { box-sizing: border-box; width: 100%; font: 13px/1.35 ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: #e8edf3; background: #11171f; border: 1px solid #2e3945; border-radius: 12px; padding: 6px;
+        box-shadow: 0 14px 34px -8px rgba(0,0,0,.55); }
+      .head { display: flex; align-items: center; gap: 6px; padding: 4px 6px 6px; color: #7d8896; font-size: 11.5px; }
+      .logo { width: 14px; height: 14px; }
+      button { all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer; border-radius: 8px; padding: 7px 8px; }
+      button:hover, button.active { background: #1a222d; }
+      button:focus-visible { outline: 2px solid #4fd3c0; outline-offset: -2px; }
+      .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .u { color: #a6b0bd; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .warn { color: #f2b45a; }
+      .unlock { color: #2bc3ae; font-weight: 600; }
+      .msg { color: #ff8266; font-size: 12px; padding: 4px 8px 2px; }
+      .msg:empty { display: none; }
+    `;
+    const menu = document.createElement('div');
+    menu.className = 'menu';
+    menu.setAttribute('role', 'listbox');
+    menu.setAttribute('aria-label', 'PassVault logins for this site');
+    menu.innerHTML = `<div class="head"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="8" fill="#2bc3ae"/><circle cx="16" cy="16" r="8.5" fill="none" stroke="#03201b" stroke-width="2.4"/><circle cx="16" cy="14.2" r="2.4" fill="#03201b"/><rect x="14.9" y="15" width="2.2" height="5.4" rx="1.1" fill="#03201b"/></svg><span>PassVault</span></div>`;
+    if (res.locked) {
+      const b = document.createElement('button');
+      b.dataset.unlock = '1';
+      b.setAttribute('role', 'option');
+      const t = document.createElement('div');
+      t.className = 't unlock';
+      t.textContent = 'Unlock PassVault to fill';
+      const u = document.createElement('div');
+      u.className = 'u';
+      u.textContent = 'Your saved logins for this site appear here once unlocked.';
+      b.append(t, u);
+      menu.append(b);
+    } else {
+      for (const it of res.items) {
+        const b = document.createElement('button');
+        b.dataset.id = it.id;
+        b.setAttribute('role', 'option');
+        // Item text is set with textContent only (never HTML).
+        const t = document.createElement('div');
+        t.className = 't';
+        t.textContent = it.title || it.username || 'Login';
+        const u = document.createElement('div');
+        u.className = 'u';
+        u.textContent = it.username || '(no username)';
+        if (it.insecure) {
+          const w = document.createElement('span');
+          w.className = 'warn';
+          w.textContent = ' · not secure (http)';
+          u.append(w);
+        }
+        b.append(t, u);
+        menu.append(b);
+      }
+    }
+    menuMsg = document.createElement('div');
+    menuMsg.className = 'msg';
+    menuMsg.setAttribute('aria-live', 'polite');
+    menu.append(menuMsg);
+    menuButtons = Array.from(menu.querySelectorAll('button'));
+    // Keep focus in the page's field while the menu is used with the mouse.
+    menu.addEventListener('mousedown', (e) => e.preventDefault());
+    menu.addEventListener('click', (e) => {
+      if (!e.isTrusted) return; // ignore scripted clicks from the page
+      const b = (e.target as Element).closest('button');
+      if (b) choose(b as HTMLButtonElement);
+    });
+    shadow.append(style, menu);
+    document.documentElement.appendChild(menuHost);
+    position();
+  }
+
+  function openMenu(field: HTMLInputElement) {
+    if (menuField === field && menuHost) return;
+    const seq = ++requestSeq;
+    void send<SuggestResult>({ type: 'inline.suggest' }).then((res) => {
+      if (seq !== requestSeq || document.activeElement !== field) return;
+      if (res && res.show) renderMenu(field, res);
+      else closeMenu();
+    });
+  }
+
+  document.addEventListener(
+    'focusin',
+    (e) => {
+      if (e.isTrusted && isLoginField(e.target)) openMenu(e.target);
+    },
+    true,
+  );
+  document.addEventListener(
+    'mousedown',
+    (e) => {
+      if (!e.isTrusted) return;
+      if (menuHost && e.composedPath().includes(menuHost)) return;
+      if (isLoginField(e.target)) openMenu(e.target);
+      else if (e.target !== menuField) closeMenu();
+    },
+    true,
+  );
+  document.addEventListener(
+    'focusout',
+    (e) => {
+      if (e.target === menuField) setTimeout(() => document.activeElement !== menuField && closeMenu(), 150);
+    },
+    true,
+  );
+  document.addEventListener(
+    'input',
+    (e) => {
+      if (e.isTrusted && e.target === menuField) closeMenu(); // the user is typing their own value
+    },
+    true,
+  );
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (!e.isTrusted || !menuHost || e.target !== menuField) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActive(activeIndex + (e.key === 'ArrowDown' ? 1 : -1));
+      } else if (e.key === 'Enter' && activeIndex >= 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        choose(menuButtons[activeIndex]!);
+      } else if (e.key === 'Escape') {
+        closeMenu();
+      }
+    },
+    true,
+  );
+  window.addEventListener('scroll', position, true);
+  window.addEventListener('resize', position);
 
   // After a post-login navigation, the background may still hold a pending prompt for this site.
   void send<PromptInfo>({ type: 'savePrompt.pending' }).then((info) => {
