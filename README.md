@@ -6,9 +6,9 @@ API tokens, `.env` files, and secure notes — with a web dashboard, a Manifest 
 browser extension, and a macOS desktop app (Neutralinojs) that has an embedded
 SSH terminal and an SSH agent.
 
-[![PassVault walkthrough — click to play](docs/media/passvault-walkthrough.jpg)](docs/media/passvault-walkthrough.mp4)
+[![PassVault feature tour — click to play](docs/media/passvault-feature-tour.jpg)](docs/media/passvault-feature-tour.mp4)
 
-*Two-minute end-to-end walkthrough, generated with Playwright + ffmpeg ([how](docs/E2E_VIDEO.md)).*
+*Narrated tour of every feature (9 min, Kokoro TTS voice-over) · [2-minute walkthrough](docs/media/passvault-walkthrough.mp4) · generated with Playwright + ffmpeg ([how](docs/E2E_VIDEO.md)).*
 
 > **Status:** working software, not yet independently audited. Read
 > [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) before storing real

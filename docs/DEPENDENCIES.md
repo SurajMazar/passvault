@@ -30,6 +30,7 @@ and run `pnpm audit --prod` and `govulncheck ./...` before every release.
 | Edge proxy | Caddy 2.10 (container image) | Apache-2.0 | Automatic TLS and simple header configuration |
 | Containers | Podman (compose via `podman compose`/`podman-compose`) | Apache-2.0 | Requested runtime; Docker also works |
 | EFF large wordlist (passphrases) | embedded data | CC BY 3.0 | Attribution in `packages/crypto/src/wordlist.ts` |
+| Video tooling (dev only, `tests/e2e-video`) | `playwright` 1.64, `kokoro-js` 1.2.1 (Kokoro-82M ONNX model), ffmpeg (system) | Apache-2.0 / Apache-2.0 / LGPL/GPL (not redistributed) | Generates the product videos; never part of any shipped client |
 
 ## Supply-chain practices
 

@@ -7,12 +7,15 @@
   "scripts": {
     "record": "tsx src/record.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check:save-prompt": "tsx src/save-prompt-check.ts"
+    "check:save-prompt": "tsx src/save-prompt-check.ts",
+    "tour:tts": "tsx src/tour/tts.ts",
+    "tour:record": "tsx src/tour/record.ts"
   },
   "dependencies": {
-    "@passvault/vault-core": "workspace:*",
     "@passvault/sync": "workspace:*",
     "@passvault/types": "workspace:*",
+    "@passvault/vault-core": "workspace:*",
+    "kokoro-js": "1.2.1",
     "otpauth": "9.5.2",
     "playwright": "1.64.0"
   }

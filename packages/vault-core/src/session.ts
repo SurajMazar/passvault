@@ -824,7 +824,12 @@ export class VaultSession {
     const engine = this.engine;
     if (!engine) throw new VaultLockedError();
     const targetVault = params.targetVaultId ?? params.vaultId;
-    const vk = this.vaultKeys.get(targetVault);
+    let vk = this.vaultKeys.get(targetVault);
+    // Right after the first sign-in on a device the vault list may not have synced yet.
+    if (!vk && this.token) {
+      await this.syncNow().catch(() => undefined);
+      vk = this.vaultKeys.get(targetVault);
+    }
     if (!vk) throw new PermissionError('The vault key is not available.');
     this.writableVault(targetVault);
     if (params.targetVaultId) this.writableVault(params.vaultId);
