@@ -1,7 +1,10 @@
 // Packages dist/ into passvault-extension-<version>.zip (store upload / distribution).
-// Pure Node (zlib deflate); no external zip tool required.
-import { deflateRawSync } from 'node:zlib';
-import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
+// Uses Info-ZIP `zip` (preinstalled on macOS and GitHub's Ubuntu runners) so the
+// archive has Unix permissions and directory entries — macOS Archive Utility
+// rejects bare MS-DOS-attribute archives. Fixed mtimes + sorted input + -X keep
+// the output reproducible.
+import { execFileSync } from 'node:child_process';
+import { readFileSync, readdirSync, statSync, existsSync, rmSync, utimesSync, chmodSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,43 +16,27 @@ if (!existsSync(join(dist, 'manifest.json'))) {
 }
 const { version } = JSON.parse(readFileSync(join(dist, 'manifest.json'), 'utf8'));
 
-const crcTable = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-const crc32 = (buf) => {
-  let c = 0xffffffff;
-  for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
+const FIXED_TIME = new Date('2020-01-01T00:00:00Z');
+const entries = [];
+const walk = (d) => {
+  for (const f of readdirSync(d).sort()) {
+    const p = join(d, f);
+    const isDir = statSync(p).isDirectory();
+    chmodSync(p, isDir ? 0o755 : 0o644);
+    utimesSync(p, FIXED_TIME, FIXED_TIME);
+    entries.push(isDir ? `${relative(dist, p)}/` : relative(dist, p));
+    if (isDir) walk(p);
+  }
 };
-const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)])).sort();
+walk(dist);
 
-const locals = [];
-const centrals = [];
-let offset = 0;
-const DOS_TIME = 0, DOS_DATE = (1 << 5) | 1 | ((2020 - 1980) << 9); // fixed timestamp → reproducible zips
-for (const file of walk(dist)) {
-  const name = Buffer.from(relative(dist, file).split('\\').join('/'));
-  const data = readFileSync(file);
-  const comp = deflateRawSync(data, { level: 9 });
-  const crc = crc32(data);
-  const h = Buffer.alloc(30);
-  h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0, 6); h.writeUInt16LE(8, 8);
-  h.writeUInt16LE(DOS_TIME, 10); h.writeUInt16LE(DOS_DATE, 12); h.writeUInt32LE(crc, 14);
-  h.writeUInt32LE(comp.length, 18); h.writeUInt32LE(data.length, 22); h.writeUInt16LE(name.length, 26); h.writeUInt16LE(0, 28);
-  locals.push(h, name, comp);
-  const c = Buffer.alloc(46);
-  c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); c.writeUInt16LE(0, 8); c.writeUInt16LE(8, 10);
-  c.writeUInt16LE(DOS_TIME, 12); c.writeUInt16LE(DOS_DATE, 14); c.writeUInt32LE(crc, 16); c.writeUInt32LE(comp.length, 20);
-  c.writeUInt32LE(data.length, 24); c.writeUInt16LE(name.length, 28); c.writeUInt32LE(offset, 42);
-  centrals.push(c, name);
-  offset += 30 + name.length + comp.length;
-}
-const cd = Buffer.concat(centrals);
-const end = Buffer.alloc(22);
-end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(centrals.length / 2, 8); end.writeUInt16LE(centrals.length / 2, 10);
-end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(offset, 16);
 const outFile = join(root, `passvault-extension-${version}.zip`);
-writeFileSync(outFile, Buffer.concat([...locals, cd, end]));
-console.log(`${relative(root, outFile)} (${centrals.length / 2} files)`);
+rmSync(outFile, { force: true });
+// TZ=UTC: zip stores local DOS time, so pin the zone for identical bytes everywhere.
+execFileSync('zip', ['-X', '-9', '-q', '-@', outFile], {
+  cwd: dist,
+  input: entries.join('\n'),
+  env: { ...process.env, TZ: 'UTC' },
+  stdio: ['pipe', 'inherit', 'inherit'],
+});
+console.log(`${relative(root, outFile)} (${entries.filter((e) => !e.endsWith('/')).length} files)`);
