@@ -20,6 +20,7 @@ import { MenuBar, type VaultState } from './shell/menu-bar';
 import { helperParams } from './shell/shortcut';
 import { BuddyBubble, BuddyNav, BuddyView } from './ui/BuddyView';
 import { MenuBarSettings } from './ui/MenuBarSettings';
+import { BrowserTouchIdSettings, EXTENSION_ORIGINS, type BrowserTouchIdDeps } from './ui/BrowserTouchIdSettings';
 import { XtermHost } from './terminal/xterm-host';
 import { createExtensions } from './extensions';
 import { DesktopOverlays } from './ui/DesktopOverlays';
@@ -109,6 +110,12 @@ const shell = new NativeShell(nl, menuBar, {
   generate: () => buddyNav.open('generate'),
   openSettings: () => useUi.getState().go('settings'),
 });
+
+const browserTouchId: BrowserTouchIdDeps = {
+  status: () => helper.request('touchid.browsers.status', {}),
+  set: (enabled) => helper.request('touchid.browsers.set', enabled ? { enabled, origins: EXTENSION_ORIGINS } : { enabled }),
+  biometrics: () => helper.request('biometric.status', {}),
+};
 
 // Global shortcut: (re)registered with every helper session; a press toggles the buddy.
 helper.onStatus((st) => {
@@ -244,6 +251,7 @@ function Root({ servers }: { servers: DesktopServers }) {
       settingsSections: [
         ...(baseExtensions.settingsSections ?? []),
         { id: 'server', label: 'Server connection', render: () => <ServerSettings servers={servers} /> },
+        { id: 'browser-touchid', label: 'Browser extension', render: () => <BrowserTouchIdSettings deps={browserTouchId} /> },
         {
           id: 'menubar',
           label: 'Menu bar & buddy',

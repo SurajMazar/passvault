@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { goTest, HELPER_DIR, recordGoTests } from '../lib/gotest';
+import { ROOT } from '../lib/paths';
 import type { Suite } from '../lib/suite';
 import { isMac } from '../lib/suite';
 import { gitGrep, run, which } from '../lib/util';
@@ -53,14 +54,21 @@ const suite: Suite = {
       }, { severity: 'medium' });
     }
 
-    await t.check('native.no-shell', 'The helper starts no shell; its only process launches are the two /usr/bin/open launchers (links, external terminal), each with an argv list', () => {
+    await t.check('native.no-shell', 'The helper starts no shell; its only process launches are the two /usr/bin/open launchers (links, external terminal) and the bundled pv-touchid, each with a fixed argv list', () => {
       const dirs = ['native/desktop-helper/internal', 'native/desktop-helper/cmd'];
       const exec = gitGrep('exec\\.Command|syscall\\.Exec|os\\.StartProcess', dirs, { extended: true }).filter((l) => !l.includes('_test.go'));
       const shells = gitGrep('"(/bin/)?(ba|z)?sh"|"-c"', dirs, { extended: true }).filter((l) => !l.includes('_test.go'));
       const allowed = ['internal/links/links.go', 'internal/term/term.go'];
-      const sitesOk = exec.length === allowed.length && allowed.every((f) => exec.some((l) => l.includes(f) && l.includes('exec.Command(argv[0], argv[1:]...)')));
+      const touchId = exec.filter((l) => l.includes('internal/keychain/touchid.go'));
+      const touchIdOk = touchId.length === 1 && touchId[0]!.includes('exec.CommandContext(ctx, bin, "--helper")');
+      const sitesOk =
+        exec.length === allowed.length + 1 && touchIdOk && allowed.every((f) => exec.some((l) => l.includes(f) && l.includes('exec.Command(argv[0], argv[1:]...)')));
       const openOnly = allowed.every((f) => readFileSync(join(HELPER_DIR, f), 'utf8').includes('"/usr/bin/open"'));
-      return { ok: sitesOk && openOnly && shells.length === 0, evidence: `process launches:\n${exec.join('\n')}\nlaunchers run /usr/bin/open: ${openOnly}\nshell invocations: ${shells.length}` };
+      const binOk = /return filepath\.Clean\(c\)/.test(readFileSync(join(HELPER_DIR, 'internal/keychain/touchid.go'), 'utf8'));
+      return {
+        ok: sitesOk && openOnly && binOk && shells.length === 0,
+        evidence: `process launches:\n${exec.join('\n')}\nlaunchers run /usr/bin/open: ${openOnly}\npv-touchid only from the app bundle, argv ["--helper"], request on stdin: ${touchIdOk && binOk}\nshell invocations: ${shells.length}`,
+      };
     }, { severity: 'critical' });
 
     await t.check('native.keychain.biometric-acl', 'Biometric unlock material is protected by the Keychain access control (Touch ID enforced by the OS, not by a UI prompt)', () => {
@@ -75,6 +83,22 @@ const suite: Suite = {
         ok,
         evidence:
           'biometric items: data-protection keychain + SecAccessControl(BiometryCurrentSet, WhenPasscodeSetThisDeviceOnly); no LAContext evaluatePolicy gate in code (the Keychain itself refuses reads without a fresh Touch ID match; re-enrolled fingers invalidate the item). The item holds a random device key that wraps the user key (wrapUserKeyForDevice).',
+      };
+    }, { severity: 'critical' });
+
+    await t.check('native.touchid.secure-enclave', 'Unsigned builds: Touch ID unlock material is sealed to a Secure Enclave key that requires a current Touch ID match (pv-touchid)', () => {
+      const sw = readFileSync(join(ROOT, 'native/touchid/pv-touchid.swift'), 'utf8');
+      const ok =
+        sw.includes('SecureEnclave.P256.KeyAgreement.PrivateKey(accessControl:') &&
+        sw.includes('[.privateKeyUsage, .biometryCurrentSet]') &&
+        sw.includes('kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly') &&
+        sw.includes('PrivateKey(dataRepresentation: keyBlob, authenticationContext: ctx)') &&
+        sw.includes('AES.GCM.seal(') &&
+        !/write\(.*secret/.test(sw);
+      return {
+        ok,
+        evidence:
+          'pv-touchid: per-secret Secure Enclave P-256 key (privateKeyUsage + biometryCurrentSet, WhenPasscodeSetThisDeviceOnly); ECDH with an ephemeral key + HKDF-SHA256 → AES-256-GCM. Opening needs the enclave to perform the key agreement, which it refuses without a fresh Touch ID match (the evaluated LAContext is handed to the enclave, which checks it). Records are 0600, namespaced per caller (desktop helper / each extension origin).',
       };
     }, { severity: 'critical' });
     t.unverified(

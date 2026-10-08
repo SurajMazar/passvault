@@ -159,7 +159,7 @@ jobs:
           CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
           if [ -z "$CWS_EXTENSION_ID" ] || [ -z "$CWS_REFRESH_TOKEN" ]; then
-            echo "Chrome Web Store credentials not configured — the zip is attached to the GitHub release for manual upload."
+            echo "Chrome Web Store credentials not configured — the store zip is attached to the GitHub release for manual upload."
             exit 0
           fi
           token=$(curl -fsS https://oauth2.googleapis.com/token \
@@ -167,7 +167,7 @@ jobs:
             -d refresh_token="$CWS_REFRESH_TOKEN" -d grant_type=refresh_token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
           echo "::add-mask::$token"
           curl -fsS -X PUT -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" \
-            -T out/passvault-extension-*.zip \
+            -T out/passvault-extension-*-chrome-web-store.zip \
             "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$CWS_EXTENSION_ID" | tee upload.json
           node -e 'const r=require("./upload.json"); if (r.uploadState !== "SUCCESS") { console.error(r); process.exit(1) }'
           curl -fsS -X POST -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" -H "Content-Length: 0" \
@@ -320,7 +320,7 @@ jobs:
               echo "| macOS app | unchanged — use the one from [${PREV}](${repo}/releases/tag/${PREV}) |"
             fi
             if [ "$EXTENSION" = "true" ]; then
-              echo "| Chrome extension | \`passvault-extension-*.zip\` — Chrome / Edge / Brave (Manifest V3) |"
+              echo "| Chrome extension | \`passvault-extension-<version>.zip\` — Chrome / Edge / Brave (Manifest V3), to install from this page. \`…-chrome-web-store.zip\` is the same build for a Chrome Web Store upload. |"
             else
               echo "| Chrome extension | unchanged — use the one from [${PREV}](${repo}/releases/tag/${PREV}) |"
             fi
@@ -341,10 +341,11 @@ jobs:
             if [ "$EXTENSION" = "true" ]; then
               echo
               echo "**Chrome extension**"
-              echo "1. Unzip \`passvault-extension-*.zip\` into a folder you keep (Chrome loads it from there)."
+              echo "1. Unzip \`passvault-extension-<version>.zip\` (not the \`-chrome-web-store\` one) into a folder you keep (Chrome loads it from there)."
               echo "2. Open \`chrome://extensions\`, enable **Developer mode**, click **Load unpacked**, choose the folder, and pin PassVault."
               echo "3. Sign in. **Change** on the sign-in screen selects production, local development or another https server."
               echo "4. Updating: unzip the new version over the same folder and click **reload** on the extension card."
+              echo "5. Touch ID (Mac): PassVault for Mac → Settings → **Touch ID in the browser extension**, then in the extension Settings → **Unlock with Touch ID**."
             fi
             echo
             echo "New here? Create your account in the web dashboard at ${PV_PRODUCTION_URL} first. Full guide: [docs/INSTALL.md](${repo}/blob/${TAG}/docs/INSTALL.md)."

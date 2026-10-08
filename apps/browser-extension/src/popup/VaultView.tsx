@@ -37,6 +37,7 @@ import { ServerSettings } from './ServerSwitch';
 import { Generator } from './Generator';
 import { activeTabId, call, copyToClipboard, errorText } from './rpc';
 import { SaveLogin } from './SaveLogin';
+import { isMac, TouchIdSettings } from './TouchIdSettings';
 
 type Route = { view: 'list' } | { view: 'detail'; id: string } | { view: 'save' };
 
@@ -71,6 +72,12 @@ export function VaultView({ state }: { state: PopupState }) {
           <Generator />
         ) : tab === 'settings' && route.view === 'list' ? (
           <>
+            {isMac() && (
+              <>
+                <TouchIdSettings />
+                <div className="border-t border-border" />
+              </>
+            )}
             <ServerSettings state={state} />
             <div className="border-t border-border" />
             <AutoSaveSettings />

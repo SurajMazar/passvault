@@ -36,6 +36,8 @@ export interface ChromeLike {
     getURL(path: string): string;
     getManifest(): { version: string };
     sendMessage(message: unknown): Promise<unknown>;
+    /** Touch ID host (optional "nativeMessaging" permission) */
+    sendNativeMessage?(application: string, message: object): Promise<unknown>;
   };
   storage: {
     local: StorageAreaLike;
@@ -63,6 +65,7 @@ export interface ChromeLike {
   };
   permissions?: {
     contains(p: { origins?: string[]; permissions?: string[] }): Promise<boolean>;
+    request?(p: { origins?: string[]; permissions?: string[] }): Promise<boolean>;
     remove?(p: { origins?: string[]; permissions?: string[] }): Promise<boolean>;
   };
   offscreen?: {

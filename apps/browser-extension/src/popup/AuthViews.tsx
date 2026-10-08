@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import QRCode from 'qrcode';
-import { ExternalLink, Lock, ShieldCheck } from 'lucide-react';
+import { ExternalLink, Fingerprint, Lock, ShieldCheck } from 'lucide-react';
 import { Banner, Button, Checkbox, Field, Input, Logo, SecretInput } from '@passvault/ui';
 import type { PopupState } from '../shared/protocol';
 import { call, copyToClipboard, errorText } from './rpc';
@@ -204,9 +204,23 @@ export function RecoveryCodes({ state }: { state: PopupState }) {
   );
 }
 
+/** Touch ID is offered once per popup opening; after a cancel the button stays. */
+let touchIdTried = false;
+
 export function Unlock({ state }: { state: PopupState }) {
   const [password, setPassword] = useState('');
   const { busy, error, run } = useSubmit();
+  const touchId = () =>
+    void run(async () => {
+      await call({ type: 'auth.unlockBiometric' });
+    });
+  useEffect(() => {
+    if (state.biometricAvailable && !touchIdTried) {
+      touchIdTried = true;
+      // Automatic prompt: cancelling it ("Use Master Password") is not an error.
+      void call({ type: 'auth.unlockBiometric' }).catch(() => undefined);
+    }
+  }, [state.biometricAvailable]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
@@ -222,6 +236,11 @@ export function Unlock({ state }: { state: PopupState }) {
         <Button type="submit" variant="primary" size="lg" loading={busy} disabled={!password} icon={<Lock className="size-4" />}>
           Unlock
         </Button>
+        {state.biometricAvailable && (
+          <Button type="button" size="lg" disabled={busy} onClick={touchId} icon={<Fingerprint className="size-4" />}>
+            Unlock with Touch ID
+          </Button>
+        )}
       </form>
       {!state.hasSession && (
         <div className="mt-3">

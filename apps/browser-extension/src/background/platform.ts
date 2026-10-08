@@ -1,6 +1,7 @@
 import { IndexedDbStore, type CacheStore } from '@passvault/sync';
 import type { Platform } from '@passvault/vault-core';
 import type { ChromeLike } from './chrome-api';
+import { createTouchIdAdapter } from './touch-id';
 
 /** Keys used before per-server storage (and by tests that pass no scope). */
 export const LEGACY_TOKEN_KEY = 'pv.sessionToken';
@@ -76,6 +77,7 @@ export function createExtensionPlatform(
       if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('Only web links can be opened');
       await c.tabs.create({ url: u.toString() });
     },
+    biometrics: createTouchIdAdapter(c, opts.scope),
   };
 }
 

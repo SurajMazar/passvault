@@ -39,7 +39,7 @@ import type { ChromeLike, SenderLike } from './chrome-api';
 import { itemDetail, summarize } from './detail';
 import { TOKEN_KEY } from './platform';
 import type { ServerCheck } from '@passvault/vault-core/servers';
-import type { ServerInfo } from '../shared/protocol';
+import type { ServerInfo, TouchIdStatus } from '../shared/protocol';
 import { checkSender } from './sender';
 import type { SavePromptManager } from './save-prompt';
 
@@ -73,6 +73,10 @@ type SessionLike = Pick<
   | 'isUnlocked'
   | 'touch'
   | 'setOnline'
+  | 'unlockWithBiometrics'
+  | 'enableBiometrics'
+  | 'disableBiometrics'
+  | 'biometricsEnabled'
 >;
 
 export interface ControllerDeps {
@@ -87,6 +91,8 @@ export interface ControllerDeps {
   tokenKey?: string;
   /** server connection (index.ts rebuilds the session when the server changes) */
   server?: ServerControl;
+  /** Touch ID availability (the platform's biometrics adapter) */
+  touchIdStatus?: () => Promise<{ available: boolean; reason?: string }>;
 }
 
 /** What the controller may do with the server connection (implemented by ServerManager). */
@@ -236,6 +242,16 @@ export class BackgroundController {
     for (const l of this.stateListeners) l(st);
   }
 
+  private async touchIdStatus(): Promise<TouchIdStatus> {
+    const enabled = await this.session.biometricsEnabled();
+    return { enabled, ...(await this.touchIdAvailability()) };
+  }
+
+  private async touchIdAvailability(): Promise<{ available: boolean; reason?: string }> {
+    const status = this.deps.touchIdStatus;
+    return status ? status() : { available: false, reason: 'Touch ID is not available' };
+  }
+
   popupState(): PopupState {
     const s = this.session.getSnapshot();
     const a = s.auth;
@@ -248,6 +264,7 @@ export class BackgroundController {
       ...(a.phase === 'mfa_enroll' ? { mfaEnroll: { secret: a.secret, otpauthUri: a.otpauthUri } } : {}),
       ...(a.phase === 'recovery_codes' ? { recoveryCodes: a.codes } : {}),
       hasSession: a.phase === 'locked' ? a.hasSession : (a.phase === 'unlocked' || a.phase === 'recovery_codes') && this.hasToken,
+      ...(a.phase === 'locked' ? { biometricAvailable: a.biometricAvailable } : {}),
       online: s.online,
       sync: {
         state: s.sync.state,
@@ -468,6 +485,16 @@ export class BackgroundController {
       case 'auth.lock':
         await this.lock('user');
         return this.popupState();
+      case 'auth.unlockBiometric':
+        await s.unlockWithBiometrics();
+        await this.syncResumeKey();
+        return this.popupState();
+      case 'touchid.status':
+        return this.touchIdStatus();
+      case 'touchid.set':
+        if (req.enabled) await s.enableBiometrics();
+        else await s.disableBiometrics();
+        return this.touchIdStatus();
       case 'auth.logout':
         await this.c.storage.session.remove(RESUME_KEY);
         this.resumeStored = false;

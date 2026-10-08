@@ -19,6 +19,7 @@ and the deviations from that contract are in [DESKTOP_HELPER.md](./DESKTOP_HELPE
 PassVault.app/Contents
 ├── MacOS/passvault-shell    the app executable: Neutralinojs binary (WKWebView window + local HTTP/WebSocket server on 127.0.0.1:47391)
 ├── MacOS/libpvwindow.dylib  buddy panel, menu-bar item and quit bridge (scripts/pvwindow.m)
+├── MacOS/pv-touchid         Touch ID via the Secure Enclave (unsigned builds; browser extension host)
 ├── MacOS/resources.neu      symlink → ../Resources/resources.neu (Neutralino looks next to its binary)
 ├── MacOS/pv-helper          Go helper, started by Neutralino as extension io.passvault.helper
 │   (or Helpers/PassVault Helper.app/Contents/MacOS/pv-helper with HELPER_LAYOUT=bundle)
@@ -142,7 +143,7 @@ object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'
 | Data | Location | Protection |
 |---|---|---|
 | API session token | Keychain, service `io.passvault.desktop`, account `pv.session` (non-biometric) via helper `keychain.*` | Keychain ACL (trusts the helper binary). If the helper is unavailable, the token is kept in memory only. It is never written to Neutralino storage or localStorage. |
-| Touch ID device key | Keychain data-protection item `pv.bio.<userId>`, `kSecAccessControlBiometryCurrentSet` | Released only after Touch ID. **Needs a signed build with `keychain-access-groups`.** Unsigned/ad-hoc builds report "requires a signed build with keychain entitlement" (shown in Settings). |
+| Touch ID device key | Signed builds: Keychain data-protection item `pv.bio.<userId>`, `kSecAccessControlBiometryCurrentSet`. Unsigned builds: `~/Library/Application Support/PassVault/touchid/<sha256>.json` (0600) written by `pv-touchid` | Released only after Touch ID either way. Unsigned builds use `pv-touchid` (`native/touchid/pv-touchid.swift`): a per-secret Secure Enclave P-256 key with `privateKeyUsage + biometryCurrentSet` (CryptoKit, no entitlement needed); ECDH with an ephemeral key + HKDF-SHA256 → AES-256-GCM. The file is useless without this Mac's Secure Enclave and a current fingerprint; re-enrolling fingers invalidates it. |
 | Offline cache (account bundle, record envelopes, wrapped keys, outbox) | Neutralino storage `~/Library/Application Support/io.passvault.desktop/.storage/pvc_<email-slug>_<hash>_*.neustorage` | **Ciphertext only** (`KeyValueStore` from `@passvault/sync`). Files are 0644 inside `~/Library` (0700). Verified: no plaintext password/key/host found in the files. |
 | Preferences (device id, last email) | same directory, `pvp_*.neustorage` | not secret |
 | Theme | WebKit localStorage for `http://localhost:47391` | not secret |

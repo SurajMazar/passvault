@@ -25,7 +25,8 @@ func Set(account string, secret []byte, biometric bool) error {
 	// Check before pv_kc_set deletes any existing item, so a failed
 	// biometric enrolment never destroys the previous secret.
 	if biometric && int(C.pv_kc_probe_dp()) == errSecMissingEntitlement {
-		return statusErr(errSecMissingEntitlement)
+		// Unsigned build: the Secure Enclave via pv-touchid (see touchid.go).
+		return touchIDWrap(account, secret)
 	}
 	a := cstr(account)
 	defer C.free(unsafe.Pointer(a))
@@ -56,6 +57,9 @@ func Get(account, reason string) ([]byte, error) {
 	var out unsafe.Pointer
 	var n C.int
 	st := int(C.pv_kc_get(a, r, &out, &n))
+	if st == errSecItemNotFound && touchIDEnrolled(account) {
+		return touchIDUnwrap(account, reason)
+	}
 	if err := statusErr(st); err != nil {
 		return nil, err
 	}
@@ -69,6 +73,7 @@ func Get(account, reason string) ([]byte, error) {
 func Delete(account string) error {
 	a := cstr(account)
 	defer C.free(unsafe.Pointer(a))
+	touchIDDelete(account)
 	return statusErr(int(C.pv_kc_delete(a)))
 }
 
@@ -79,7 +84,7 @@ func Status() BiometricStatus {
 		return BiometricStatus{Available: false, Reason: laReason(int(la))}
 	}
 	if st := int(C.pv_kc_probe_dp()); st == errSecMissingEntitlement {
-		return BiometricStatus{Available: false, Reason: ReasonNeedsEntitlement}
+		return touchIDStatus()
 	}
 	return BiometricStatus{Available: true, Reason: ""}
 }

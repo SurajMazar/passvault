@@ -76,6 +76,13 @@ log "pv-helper (universal)"
 make -C "$HELPER_DIR" universal VERSION="$VERSION" >/dev/null
 lipo -info "$HELPER_DIR/bin/pv-helper-universal"
 
+log "pv-touchid (Touch ID without entitlements; see native/touchid/pv-touchid.swift)"
+for a in arm64 x86_64; do
+  swiftc -O -target "$a-apple-macos$MIN_MACOS" -o "$BUILD/pv-touchid-$a" "$REPO/native/touchid/pv-touchid.swift"
+done
+lipo -create -output "$BUILD/pv-touchid-universal" "$BUILD/pv-touchid-arm64" "$BUILD/pv-touchid-x86_64"
+lipo -info "$BUILD/pv-touchid-universal"
+
 log "libpvwindow.dylib (buddy floats above every app; see scripts/pvwindow.m)"
 clang -arch arm64 -arch x86_64 -mmacosx-version-min="$MIN_MACOS" -dynamiclib -fobjc-arc -O2 -Wall -Wextra -Werror \
   -framework AppKit -framework WebKit -install_name @executable_path/libpvwindow.dylib -o "$BUILD/libpvwindow.dylib" scripts/pvwindow.m
@@ -104,14 +111,17 @@ assemble() { # assemble <arch: universal|arm64|x64> <app path>
     universal)
       cp bin/neutralino-mac_universal "$c/MacOS/passvault-shell"
       cp "$BUILD/libpvwindow.dylib" "$c/MacOS/libpvwindow.dylib"
+      cp "$BUILD/pv-touchid-universal" "$c/MacOS/pv-touchid"
       cp "$HELPER_DIR/bin/pv-helper-universal" "$BUILD/pv-helper.$arch" ;;
     arm64)
       cp bin/neutralino-mac_arm64 "$c/MacOS/passvault-shell"
       slice "$BUILD/libpvwindow.dylib" arm64 "$c/MacOS/libpvwindow.dylib"
+      cp "$BUILD/pv-touchid-arm64" "$c/MacOS/pv-touchid"
       cp "$HELPER_DIR/bin/pv-helper-arm64" "$BUILD/pv-helper.$arch" ;;
     x64)
       cp bin/neutralino-mac_x64 "$c/MacOS/passvault-shell"
       slice "$BUILD/libpvwindow.dylib" x86_64 "$c/MacOS/libpvwindow.dylib"
+      cp "$BUILD/pv-touchid-x86_64" "$c/MacOS/pv-touchid"
       cp "$HELPER_DIR/bin/pv-helper-amd64" "$BUILD/pv-helper.$arch" ;;
   esac
   # Link the buddy window library into the shell (LC_LOAD_DYLIB; no DYLD_* variables).
@@ -145,6 +155,7 @@ assemble() { # assemble <arch: universal|arm64|x64> <app path>
     codesign --force --sign - --identifier io.passvault.helper "$c/MacOS/pv-helper"
   fi
   codesign --force --sign - --identifier io.passvault.desktop.window "$c/MacOS/libpvwindow.dylib"
+  codesign --force --sign - --identifier io.passvault.touchid "$c/MacOS/pv-touchid"
   # The shell is the app's executable, so it carries the app's identifier.
   codesign --force --sign - --identifier io.passvault.desktop "$c/MacOS/passvault-shell"
   # No --deep: it would re-sign the inner code above with generated identifiers.
@@ -193,6 +204,7 @@ for arch in $ARCHS; do
   mkdir -p "$(dirname "$APP")"
   assemble "$arch" "$APP"
   for b in "$APP/Contents/MacOS/"* ; do
+    [[ -L "$b" ]] && continue # resources.neu → ../Resources (data, not code)
     printf '  %-16s %s\n' "$(basename "$b")" "$(lipo -archs "$b")"
   done
   [[ "$HELPER_LAYOUT" == "bundle" ]] && printf '  %-16s %s\n' "pv-helper" "$(lipo -archs "$APP/Contents/Helpers/PassVault Helper.app/Contents/MacOS/pv-helper")"

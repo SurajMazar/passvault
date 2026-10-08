@@ -10,8 +10,11 @@ describe('generated manifest', () => {
     expect(m.host_permissions).toEqual(['https://api.passvault.example:8443/*']);
     // All-sites access is OPTIONAL: requested only when the user enables "Offer to save passwords".
     expect(m.optional_host_permissions).toEqual(['https://*/*', 'http://*/*']);
+    // Native messaging is OPTIONAL too: requested only when the user turns on Touch ID unlock.
+    expect(m.optional_permissions).toEqual(['nativeMessaging']);
+    expect(m.key).toMatch(/^MIIBIjAN/);
     expect(m.content_security_policy.extension_pages).toBe("script-src 'self' 'wasm-unsafe-eval'; object-src 'self'");
-    const json = JSON.stringify(m);
+    const json = JSON.stringify({ ...m, optional_permissions: undefined });
     for (const forbidden of ['<all_urls>', '"tabs"', 'webRequest', 'nativeMessaging', 'content_scripts', 'externally_connectable', 'web_accessible_resources']) {
       expect(json).not.toContain(forbidden);
     }

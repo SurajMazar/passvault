@@ -51,7 +51,8 @@ Error codes: `bad_request`, `unknown_op`, `invalid_session`, `not_found`,
 | `keychain.set` | `{ account, secretB64, biometric }` | `{}` | service fixed to `io.passvault.desktop`; `account` matches `^pv\.[a-z0-9._-]{1,64}$`. `biometric: true` uses `kSecAccessControlBiometryCurrentSet` in the data-protection keychain (requires signed build + entitlement) |
 | `keychain.get` | `{ account, reason }` | `{ secretB64 }` | biometric items trigger the system Touch ID prompt; denial → `denied` |
 | `keychain.delete` | `{ account }` | `{}` | |
-| `biometric.status` | `{}` | `{ available, reason }` | |
+| `biometric.status` | `{}` | `{ available, reason }` | Signed builds: data-protection Keychain. Unsigned builds: the bundled `pv-touchid` (Secure Enclave), see DESKTOP.md → Touch ID |
+| `touchid.browsers.status` / `touchid.browsers.set` | `{}` / `{ enabled, origins? }` (1–8 `chrome-extension://<32 a–p>/` when enabling) | `{ registered, browsers? }` | Registers (or removes) `pv-touchid` as the Chrome native-messaging host `io.passvault.touchid` for those extension origins, in each installed Chromium browser |
 | `ssh.connect` | `{ connId, label, target: Hop, jump?: Hop, cols, rows }` | `{ connId }` | async: progress via events |
 | `ssh.hostKeyDecision` | `{ connId, hop, trust }` | `{}` | answer to `ssh.hostKey` event (only for `status: unknown`) |
 | `ssh.promptResponse` | `{ connId, promptId, answers?: string[], cancel?: boolean }` | `{}` | answer to keyboard-interactive prompt |

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/passvault/desktop-helper/internal/agentsrv"
@@ -303,6 +304,31 @@ type loginSetP struct {
 	Enabled bool `json:"enabled"`
 }
 
+type browsersSetP struct {
+	Enabled bool     `json:"enabled"`
+	Origins []string `json:"origins"`
+}
+
+var extensionOrigin = regexp.MustCompile(`^chrome-extension://[a-p]{32}/$`)
+
+func (p *browsersSetP) Validate() error {
+	if !p.Enabled {
+		if len(p.Origins) != 0 {
+			return ipc.Errf(ipc.CodeBadRequest, "origins are only accepted when enabling")
+		}
+		return nil
+	}
+	if len(p.Origins) == 0 || len(p.Origins) > 8 {
+		return ipc.Errf(ipc.CodeBadRequest, "between 1 and 8 extension origins are required")
+	}
+	for _, o := range p.Origins {
+		if !extensionOrigin.MatchString(o) {
+			return ipc.Errf(ipc.CodeBadRequest, "invalid extension origin")
+		}
+	}
+	return nil
+}
+
 type linkOpenP struct {
 	URL string `json:"url"`
 }
@@ -383,6 +409,25 @@ func (a *App) register() {
 	})
 	ipc.Register(d, "biometric.status", ipc.Opts{}, func(context.Context, *ipc.Session, *empty) (any, error) {
 		return keychain.Status(), nil
+	})
+	// Touch ID for the browser extension: registers pv-touchid as a Chrome
+	// native-messaging host for the given extension origins (or removes it).
+	ipc.Register(d, "touchid.browsers.status", ipc.Opts{}, func(context.Context, *ipc.Session, *empty) (any, error) {
+		on, err := keychain.BrowsersStatus()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]bool{"registered": on}, nil
+	})
+	ipc.Register(d, "touchid.browsers.set", ipc.Opts{}, func(_ context.Context, _ *ipc.Session, p *browsersSetP) (any, error) {
+		if !p.Enabled {
+			return map[string]any{"registered": false}, keychain.UnregisterBrowsers()
+		}
+		browsers, err := keychain.RegisterBrowsers(p.Origins)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"registered": len(browsers) > 0, "browsers": browsers}, nil
 	})
 
 	// SSH sessions.
@@ -561,5 +606,5 @@ func Ops() []string {
 		"ssh.resize", "ssh.disconnect", "ssh.test", "ssh.keygen", "ssh.inspectKey", "agent.status",
 		"agent.start", "agent.stop", "agent.addKey", "agent.removeKey", "agent.signDecision",
 		"term.openExternal", "link.open", "net.inspectTls", "hotkey.set", "hotkey.clear", "login.status", "login.set",
-		"fs.writeExport", "fs.readImport"}
+		"touchid.browsers.status", "touchid.browsers.set", "fs.writeExport", "fs.readImport"}
 }

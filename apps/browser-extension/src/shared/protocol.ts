@@ -43,6 +43,9 @@ export const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('auth.cancel') }).strict(),
   z.object({ type: z.literal('auth.unlock'), password: z.string().min(1).max(1024) }).strict(),
   z.object({ type: z.literal('auth.lock') }).strict(),
+  z.object({ type: z.literal('auth.unlockBiometric') }).strict(),
+  z.object({ type: z.literal('touchid.status') }).strict(),
+  z.object({ type: z.literal('touchid.set'), enabled: z.boolean() }).strict(),
   z.object({ type: z.literal('auth.logout') }).strict(),
   z.object({ type: z.literal('vault.sync') }).strict(),
   z.object({ type: z.literal('vault.list'), query: short(200).optional(), limit: z.int().min(1).max(500).optional() }).strict(),
@@ -136,6 +139,8 @@ export interface PopupState {
   /** only in the recovery_codes phase (popup only) */
   recoveryCodes?: string[];
   hasSession: boolean;
+  /** locked: Touch ID unlock is set up and usable */
+  biometricAvailable?: boolean;
   online: boolean;
   sync: { state: string; lastSyncAt: string | null; lastError: string | null; pending: number; failed: number; conflicts: number };
   lockTimeoutMinutes: number;
@@ -263,6 +268,9 @@ export interface ResponseMap {
   'auth.cancel': PopupState;
   'auth.unlock': PopupState;
   'auth.lock': PopupState;
+  'auth.unlockBiometric': PopupState;
+  'touchid.status': TouchIdStatus;
+  'touchid.set': TouchIdStatus;
   'auth.logout': PopupState;
   'vault.sync': PopupState;
   'vault.list': { items: ItemSummary[]; total: number };
@@ -289,6 +297,15 @@ export interface ResponseMap {
 }
 
 /** "Offer to save passwords" setting (requires the optional all-sites host permission). */
+/** Touch ID unlock through PassVault for Mac (background/touch-id.ts). */
+export interface TouchIdStatus {
+  /** this Mac can do it right now (host registered, Touch ID enrolled, permission granted) */
+  available: boolean;
+  /** turned on for this account in this browser */
+  enabled: boolean;
+  reason?: string;
+}
+
 export interface AutoSaveStatus {
   enabled: boolean;
   /** suggestions in login fields (inline menu) */

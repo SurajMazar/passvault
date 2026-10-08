@@ -29,7 +29,7 @@ const suite: Suite = {
     if (b.status !== 0 || !existsSync(join(out, 'manifest.json'))) {
       t.unverified('ext.manifest', 'Production manifest', `build failed: ${b.stderr.slice(-1500)}`);
     } else {
-      await t.check('ext.manifest', 'Production manifest: MV3, minimal permissions, one host, optional all-sites only, no web-accessible resources or external messaging', () => {
+      await t.check('ext.manifest', 'Production manifest: MV3, minimal permissions, one host, optional all-sites and native messaging only, no web-accessible resources or external messaging', () => {
         const m = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
         const perms = [...m.permissions].sort().join(',');
         const ok =
@@ -41,8 +41,9 @@ const suite: Suite = {
           !m.web_accessible_resources &&
           !m.externally_connectable &&
           !perms.includes('nativeMessaging') &&
+          JSON.stringify(m.optional_permissions ?? []) === JSON.stringify(['nativeMessaging']) &&
           m.content_security_policy?.extension_pages === "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'";
-        return { ok, evidence: `permissions ${perms}; hosts ${JSON.stringify(m.host_permissions)}; optional ${JSON.stringify(m.optional_host_permissions)}; content_scripts ${!!m.content_scripts}; web_accessible_resources ${!!m.web_accessible_resources}; externally_connectable ${!!m.externally_connectable}; CSP ${m.content_security_policy?.extension_pages}` };
+        return { ok, evidence: `permissions ${perms}; hosts ${JSON.stringify(m.host_permissions)}; optional ${JSON.stringify(m.optional_host_permissions)}; optional permissions ${JSON.stringify(m.optional_permissions)}; content_scripts ${!!m.content_scripts}; web_accessible_resources ${!!m.web_accessible_resources}; externally_connectable ${!!m.externally_connectable}; CSP ${m.content_security_policy?.extension_pages}` };
       }, { severity: 'high' });
 
       await t.check('ext.no-remote-code', 'The packaged extension loads no remote code and contains no source maps', () => {

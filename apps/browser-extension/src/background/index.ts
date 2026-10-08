@@ -47,6 +47,7 @@ function boot(server: string, servers: ServerManager): Runtime {
     savePrompt,
     tokenKey: tokenKey(scope),
     server: servers,
+    touchIdStatus: () => platform.biometrics?.status() ?? Promise.resolve({ available: false }),
   });
   const inline = new InlineMenuManager(c, session, own, { matches: (tabId) => controller.matches(tabId), fill: (tabId, id, insecure) => controller.fill(tabId, id, insecure) });
   void savePrompt.syncRegistration().catch(() => log('autosave registration failed'));

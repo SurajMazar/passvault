@@ -3,7 +3,9 @@ package keychain
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/passvault/desktop-helper/internal/ipc"
@@ -87,5 +89,39 @@ func TestBiometricHonestOnUnsignedBuild(t *testing.T) {
 			_ = Delete("pv.test.bio-probe")
 			t.Fatalf("fallback item exists: %v", err)
 		}
+	}
+}
+
+// Without the keychain entitlement, biometric items go to pv-touchid: one
+// JSON request on stdin, never argv, and its errors map to IPC codes.
+func TestTouchIDFallbackProtocol(t *testing.T) {
+	if runtime.GOOS != "darwin" || os.Getenv("PV_SKIP_KEYCHAIN_TESTS") != "" {
+		t.Skip("darwin only")
+	}
+	dir := t.TempDir()
+	log := filepath.Join(dir, "stdin.log")
+	fake := filepath.Join(dir, "pv-touchid")
+	script := "#!/bin/sh\n[ \"$1\" = --helper ] || exit 9\nreq=$(cat)\nprintf '%s\\n' \"$req\" >> '" + log + "'\n" +
+		"case \"$req\" in *'\"op\":\"status\"'*) echo '{\"ok\":true,\"available\":true}';; *'\"op\":\"wrap\"'*) echo '{\"ok\":true}';; " +
+		"*) echo '{\"ok\":false,\"code\":\"denied\",\"message\":\"Touch ID was cancelled or did not match\"}';; esac\n"
+	if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	prev := touchIDBinary
+	touchIDBinary = func() string { return fake }
+	defer func() { touchIDBinary = prev }()
+
+	if st := touchIDStatus(); !st.Available {
+		t.Fatalf("status %+v", st)
+	}
+	if err := touchIDWrap("pv.test.acct", []byte("s3cret")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := touchIDUnwrap("pv.test.acct", "unlock"); ipc.AsError(err).Code != ipc.CodeDenied {
+		t.Fatalf("unwrap error %v", err)
+	}
+	b, _ := os.ReadFile(log)
+	if !strings.Contains(string(b), `"secretB64":"czNjcmV0"`) || strings.Contains(string(b), "s3cret") {
+		t.Fatalf("secret must travel base64 on stdin only:\n%s", b)
 	}
 }

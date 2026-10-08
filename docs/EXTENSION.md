@@ -104,12 +104,20 @@ to `chrome.scripting.executeScript({ func, args })`.
 | `offscreen` | An offscreen document (reason `CLIPBOARD`) clears the clipboard after the configured timeout. The service worker has no clipboard access, and the popup is usually closed by then. | none |
 | `clipboardWrite` | Lets the offscreen document write an empty string to the clipboard without a user gesture. | may show "Modify data you copy and paste" |
 | `host_permissions: [<default server origin>/*]` | API calls from the service worker to the built-in server (production, else `http://localhost:3000`). | "Read and change your data on <api host>" |
+| `optional_permissions: [nativeMessaging]` | Requested at runtime only, when the user turns on **Unlock with Touch ID** (macOS). Talks only to `io.passvault.touchid`, the host PassVault for Mac registers. Removed again when Touch ID is turned off. | "Communicate with cooperating native applications" |
 | `optional_host_permissions: [https://*/*, http://*/*]` | Requested at runtime only: **all sites** if the user enables "Offer to save passwords" (lets the opt-in content script notice login form submissions), or **one origin** when the user tests or connects to another server. Removable at any time. | "Read and change all your data on all websites" (when enabling the save prompt) or "… on <server host>" (when switching server) |
 
 Deliberately **not** requested: `<all_urls>` or any other website host
-permission, `tabs`, `webRequest`, `cookies`, `nativeMessaging`, content
-scripts, `externally_connectable`, and `web_accessible_resources`. A
-manifest unit test checks this list.
+permission, `tabs`, `webRequest`, `cookies`, `nativeMessaging` at install
+(it is optional, see above), content scripts, `externally_connectable`, and
+`web_accessible_resources`. A manifest unit test checks this list.
+
+The manifest carries a `key` (public half only) so installs from the release
+zip always get the same ID, `hpnpkdckiinjkfjolbfkhbekeknhmdff`, which PassVault
+for Mac allow-lists for Touch ID. The Chrome Web Store assigns its own ID and
+refuses a `key`, so `pnpm zip` also writes
+`passvault-extension-<version>-chrome-web-store.zip` without it; add the store
+ID to the desktop build with `VITE_PV_EXTENSION_IDS`.
 
 CSP: `extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"`.
 
@@ -330,14 +338,25 @@ alive, but if the popup closes and the worker is suspended, the user signs in
 again. MFA verification supports a TOTP code, a recovery code, and "trust
 this browser".
 
-## Desktop integration (deferred)
+## Touch ID unlock (macOS)
 
-The extension does not talk to the desktop app in this milestone, and the
-`nativeMessaging` permission is not requested. The planned design:
+1. PassVault for Mac → Settings → **Touch ID in the browser extension** registers
+   `pv-touchid` (inside PassVault.app) as the native-messaging host
+   `io.passvault.touchid` for the extension's ID, in every installed Chromium
+   browser (`~/Library/Application Support/<browser>/NativeMessagingHosts/`).
+2. Extension → Settings → **Unlock with Touch ID** asks for the optional
+   `nativeMessaging` permission, then vault-core's `enableBiometrics` wraps the
+   user key with a random device key and hands that key to the host
+   (`enroll`), which seals it to a Secure Enclave key that needs a current
+   Touch ID match. The wrapped user key stays in this browser's storage.
+3. When locked, the popup offers Touch ID (once automatically per opening; the
+   prompt's cancel button says "Use Master Password"). The host releases the
+   device key only after the enclave accepts the fingerprint.
 
-- A native-messaging host is registered by the desktop app and allow-listed for the extension id.
-- Pairing is explicit. The desktop app shows a short pairing code that the user types into the extension. Both sides then derive a channel key from an authenticated key exchange bound to that code, using a PAKE such as SPAKE2 or CPace over libsodium primitives.
-- Every message is encrypted and authenticated with the channel key. Each side can revoke the pairing. The desktop app would only ever answer "unlock with biometrics" or "is the vault unlocked", never hand out raw vault keys without user presence.
+Chrome passes the calling extension's origin to the host, and the host keeps
+a separate namespace per origin (and for the desktop app), so one caller can
+never read another's key. The prompt text is fixed by the host. The master
+password always works; turning Touch ID off deletes the sealed key.
 
 ## Known limitations
 

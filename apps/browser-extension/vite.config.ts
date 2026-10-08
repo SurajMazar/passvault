@@ -8,6 +8,16 @@ const root = import.meta.dirname;
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string; description: string };
 
 /**
+ * Public half of the extension's signing key. It pins the extension ID
+ * (hpnpkdckiinjkfjolbfkhbekeknhmdff) for installs from the release zip, so the
+ * macOS app can name it in the Touch ID native-messaging host's allowed_origins.
+ * The private half is not needed (and not kept): Chrome only checks the ID.
+ * Chrome Web Store uploads must not carry it (scripts/zip.mjs makes a store zip).
+ */
+export const EXTENSION_PUBLIC_KEY =
+  'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlP/dfeE6MM1S1jNThiIsJI8tUjQFCQn5slEb8x44L5R7ziCrYLPTtV+XmHbBkotOmvehcmWLubnH+/tdwhoSgd8hijx5yqNAs8xPzjdcgyCf6EWXeoRRmoneEIgK94jy64AI3Hf4H70G0hUjYJcVkXGLr3CiRnEROAzJqYN2ApvMkrTJNqlwGBAuCAzEBzYZoHKwzirzBohCXEojIrZfJP3JxarO3chCL084zQ05k27YFWDAPnr1sXzN1CzLhQ1Kb8Cks5KzV0SA6gSme/xeiMQbZXUA/YdZVhv7gwUz7TNTIxS2xkjhkBIKMQ0FoyQ5eyDCq5IuZvVyLvj/iwRsrwIDAQAB';
+
+/**
  * Build manifest.json with minimal permissions. The only host granted at install
  * is the default server (the built-in production server, else local development);
  * other servers the user enters in the popup are granted through Chrome's
@@ -21,6 +31,7 @@ export function buildManifest(apiUrl: string) {
     name: 'PassVault',
     short_name: 'PassVault',
     version: pkg.version,
+    key: EXTENSION_PUBLIC_KEY,
     description: 'End-to-end encrypted password and developer-secrets manager.',
     minimum_chrome_version: '116',
     action: {
@@ -35,6 +46,9 @@ export function buildManifest(apiUrl: string) {
     // Requested at runtime only: all sites when the user enables "Offer to save passwords",
     // or one origin when the user switches to another server.
     optional_host_permissions: ['https://*/*', 'http://*/*'],
+    // Requested when the user turns on Touch ID unlock: talks only to PassVault's
+    // own macOS host (io.passvault.touchid), registered by the PassVault app.
+    optional_permissions: ['nativeMessaging'],
     content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
     commands: { _execute_action: { suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' } } },
   };
