@@ -200,12 +200,8 @@ function BuddyLayer({ server }: { server: string }) {
   }
   if (mode !== 'buddy' || !s) return null;
   return (
-    <div className={`fixed inset-0 z-[55] pv-morph${morph ? ` pv-morph-${morph}` : ''}`}>
-      {morph && (
-        <div className="pv-morph-avatar">
-          <BuddyBubble menuBar={menuBar} preview />
-        </div>
-      )}
+    <div className="fixed inset-0 z-[55]">
+      <div className={`pv-morph${morph ? ` pv-morph-${morph}` : ''}`}>
       <BuddyView
         session={s}
         menuBar={menuBar}
@@ -228,6 +224,10 @@ function BuddyLayer({ server }: { server: string }) {
           openSettings: () => void menuBar.showFull().then(() => useUi.getState().go('settings')),
         }}
       />
+      </div>
+      <div className={`pv-morph-avatar${morph ? ` pv-morph-avatar-${morph}` : ''}`} aria-hidden>
+        <BuddyBubble menuBar={menuBar} preview />
+      </div>
     </div>
   );
 }

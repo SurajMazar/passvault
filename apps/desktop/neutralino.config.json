@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/v6.10.0/schemas/neutralino.config.schema.json",
   "applicationId": "io.passvault.desktop",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "defaultMode": "window",
   "port": 47391,
   "documentRoot": "/resources/app/",
