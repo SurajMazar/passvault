@@ -146,8 +146,9 @@ Older installs are migrated once: the pre-profiles selection (`pvg_server` /
   answer 403 `registration_closed`; `/meta` reports `"registration": "closed"`).
   Existing accounts are unaffected. Deploy workflow: repository variable
   `REGISTRATION_OPEN`.
-- The desktop app's origin is `http://localhost:47391`; a self-hosted server
-  must list it in `CORS_ORIGINS` (the deploy workflow adds it). The extension
+- The desktop app's origin is `http://127.0.0.1:47391`; a self-hosted server
+  must list it in `CORS_ORIGINS` (the deploy workflow adds it, plus
+  `http://localhost:47391` for older builds). The extension
   calls the API from its service worker with host access and needs no CORS entry.
 
 ## Tests

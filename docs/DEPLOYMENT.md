@@ -199,7 +199,7 @@ password manager as well.
                    postgres 16  (volume pgdata, not published)                        │
                  └───────────────────────────────────────────────────────────────────┘
  Clients: web dashboard (same origin) · browser extension (host permission for the API
- origin) · macOS desktop app (fixed origin http://localhost:47391, allowed via CORS)
+ origin) · macOS desktop app (fixed origin http://127.0.0.1:47391, allowed via CORS)
 ```
 
 Everything the server stores is either ciphertext or authorization metadata
@@ -288,7 +288,7 @@ non-SMTP mail transport.
 `CORS_ORIGINS` must list, comma-separated and exact:
 
 1. `https://<PV_DOMAIN>` — the web dashboard;
-2. `http://localhost:47391` — the macOS desktop app (Neutralino serves its UI
+2. `http://127.0.0.1:47391` (and `http://localhost:47391` for older builds) — the macOS desktop app (Neutralino serves its UI
    from this fixed loopback origin);
 3. `chrome-extension://<id>` — the published extension's id (§8). The extension
    also works without it because its host permission bypasses CORS; listing it is
@@ -332,7 +332,7 @@ cp deploy/.env.production.example deploy/.env.rehearsal
 ```
 
 Set `PV_DOMAIN=localhost`, `PV_PUBLIC_PORT_SUFFIX=:8443`, `PV_HTTP_PORT=8080`,
-`PV_HTTPS_PORT=8443`, `CORS_ORIGINS=https://localhost:8443,http://localhost:47391`,
+`PV_HTTPS_PORT=8443`, `CORS_ORIGINS=https://localhost:8443,http://127.0.0.1:47391,http://localhost:47391`,
 `SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_REQUIRE_TLS=false`, plus fresh secrets, then:
 
 ```bash
@@ -408,7 +408,7 @@ Build, sign, notarize, and ship a DMG as described in [DESKTOP.md](DESKTOP.md):
 - distribute the notarized, stapled DMG over HTTPS (e.g. your release page) and
   publish its SHA-256; there is no auto-updater that downloads code.
 
-The desktop window's origin is `http://localhost:47391`; keep it in `CORS_ORIGINS`.
+The desktop window's origin is `http://127.0.0.1:47391`; keep it (and `http://localhost:47391`) in `CORS_ORIGINS`. The deploy workflow adds both.
 
 ## 10. Upgrades
 
@@ -519,7 +519,7 @@ The 2026-10-08 rehearsal drill matched exactly (2 users, 8 records,
 - [ ] `https://<domain>/api/v1/health` OK; HSTS, CSP, X-Frame-Options present; HTTP redirects to HTTPS.
 - [ ] Registration email delivered (code arrives, SPF/DKIM pass); recovery email link opens `/recover`.
 - [ ] Mandatory MFA enrollment works; recovery codes shown once.
-- [ ] `CORS_ORIGINS` contains the web origin, `http://localhost:47391`, and the extension id.
+- [ ] `CORS_ORIGINS` contains the web origin, `http://127.0.0.1:47391` and `http://localhost:47391`, and the extension id.
 - [ ] Extension published/approved; desktop DMG signed, notarized, stapled, checksum published.
 - [ ] Daily encrypted off-host backups running; restore drill completed.
 - [ ] Uptime monitor and log shipping in place; alerts configured.
@@ -532,7 +532,7 @@ The 2026-10-08 rehearsal drill matched exactly (2 users, 8 records,
 |---|---|
 | API container exits at start with a config error | a required secret is missing/short, `WEB_APP_URL` is not https, or `MAIL_TRANSPORT` isn't smtp — read `podman logs passvault-prod-api-1` |
 | Caddy restarts with `parsing caddyfile tokens for 'email'` | `PV_ACME_EMAIL` empty — set it |
-| Browser shows CORS errors from the desktop app | `http://localhost:47391` missing from `CORS_ORIGINS` |
+| Browser shows CORS errors from the desktop app | `http://127.0.0.1:47391` missing from `CORS_ORIGINS` (Settings → Server connection names the exact origin) |
 | Users never receive codes | SMTP credentials/port/TLS; check provider logs; verify SPF/DKIM |
 | `429 rate_limited` during normal use | many users behind one NAT; raise `RATE_LIMIT_*` or ensure `TRUST_PROXY` is set so real client IPs are used |
 | Sync shows "changes pending" that never clear | API unreachable from that client, or a failed change (Settings → Sync shows the error and Retry/Discard) |

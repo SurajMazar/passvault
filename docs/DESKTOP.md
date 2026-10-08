@@ -26,7 +26,7 @@ PassVault.app/Contents
 ```
 
 ```
-┌──────────── WKWebView (http://localhost:47391, CSP) ─────────────┐
+┌──────────── WKWebView (http://127.0.0.1:47391, CSP) ─────────────┐
 │ @passvault/app UI  +  desktop adapter (src/platform, src/desktop) │
 └──────────────┬────────────────────────────────────────────────────┘
                │ WebSocket, NL_TOKEN (one-time)          native calls limited by nativeAllowList
@@ -124,7 +124,7 @@ Injected as `<meta http-equiv>` by `vite.config.ts` (`cspPolicy()`), API origin 
 ```
 default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline';
 img-src 'self' data:; font-src 'self';
-connect-src 'self' ws://localhost:47391 ws://127.0.0.1:47391 <API origin>;
+connect-src 'self' ws://localhost:47391 ws://127.0.0.1:47391 https: http://localhost:* http://127.0.0.1:*;
 object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'
 ```
 
@@ -322,8 +322,8 @@ at any time from **Settings → Server connection** or the sign-in/lock screen
   VITE_API_URL=https://vault.example.com VITE_WEB_URL=https://vault.example.com pnpm --filter @passvault/desktop package
   ```
 
-- The desktop UI's origin is `http://localhost:47391`, so the CORS allow list
-  of every server it connects to must include it.
+- The desktop UI's origin is `http://127.0.0.1:47391`, so the CORS allow list
+  of every server it connects to must include it (the deploy workflow adds it).
 
 ### Development
 

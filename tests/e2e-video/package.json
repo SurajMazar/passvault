@@ -10,7 +10,8 @@
     "check:save-prompt": "tsx src/save-prompt-check.ts",
     "tour:tts": "tsx src/tour/tts.ts",
     "tour:record": "tsx src/tour/record.ts",
-    "check:server-switch": "tsx src/server-switch-check.ts"
+    "check:server-switch": "tsx src/server-switch-check.ts",
+    "check:save-prompt-extension": "tsx src/save-prompt-extension-check.ts"
   },
   "devDependencies": {
     "@passvault/sync": "workspace:*",

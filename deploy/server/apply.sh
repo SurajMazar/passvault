@@ -90,7 +90,8 @@ for k in ("SMTP_HOST", "SMTP_PORT"):
 registration = (env.get("REGISTRATION_OPEN") or "true").strip().lower()
 if registration not in ("true", "false"): sys.exit("REGISTRATION_OPEN must be true or false")
 
-cors = [f"https://{domain}", "http://localhost:47391"]
+# the desktop app's webview: Neutralino serves it as 127.0.0.1 (localhost kept for older builds)
+cors = [f"https://{domain}", "http://127.0.0.1:47391", "http://localhost:47391"]
 cors += [o.strip() for o in env.get("PV_EXTRA_CORS_ORIGINS", "").split(",") if o.strip()]
 api = {
     "DATABASE_URL": db,

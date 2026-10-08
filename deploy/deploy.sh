@@ -59,7 +59,7 @@ done
 domain="$(get PV_DOMAIN)"
 cors="$(get CORS_ORIGINS)"
 [[ -z "$domain" || ",$cors," == *",https://$domain,"* ]] || problem "CORS_ORIGINS must contain https://$domain"
-[[ ",$cors," == *",http://localhost:47391,"* ]] || warn "CORS_ORIGINS lacks http://localhost:47391 (the macOS desktop app)"
+[[ ",$cors," == *",http://127.0.0.1:47391,"* ]] || warn "CORS_ORIGINS lacks http://127.0.0.1:47391 (the macOS desktop app)"
 [[ "$cors" == *"chrome-extension://"* ]] || warn "CORS_ORIGINS has no chrome-extension:// origin yet (fine until the extension is published)"
 [[ -z "$(get SMTP_USER)" ]] && warn "SMTP_USER is empty (only fine if your SMTP relay needs no auth)"
 
