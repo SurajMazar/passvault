@@ -407,7 +407,7 @@ function PreferencesTab() {
         </div>
       </Section>
       {session.platformRef.biometrics && (
-        <Section title="Touch ID" description="Stores a device-only key in the macOS Keychain that can be released only after biometric authentication. That key unwraps your vault key on this Mac.">
+        <Section title="Touch ID" description="Keeps a device-only key that only your fingerprint can release: the Keychain on signed builds, otherwise this Mac’s Secure Enclave. That key unwraps your vault key on this Mac; your master password always works too.">
           {!bio ? (
             <Spinner />
           ) : !bio.available ? (

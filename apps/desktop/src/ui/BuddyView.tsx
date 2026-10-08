@@ -388,21 +388,23 @@ export function AvatarPicker({ value, state, onChange }: { value: AvatarChoice; 
 }
 
 /** Minimized buddy: the avatar alone, with a ring in the vault-state colour. Click to open; drag to move. */
-export function BuddyBubble({ menuBar }: { menuBar: MenuBar }) {
+/** `preview`: drawn over the card while it morphs (not interactive, not draggable). */
+export function BuddyBubble({ menuBar, preview = false }: { menuBar: MenuBar; preview?: boolean }) {
   useSyncExternalStore(
     (cb) => menuBar.subscribe(cb),
     () => menuBar.state + JSON.stringify(menuBar.settings.avatar).length,
   );
   const el = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (!el.current) return;
+    if (!el.current || preview) return;
     return menuBar.makeDraggable(el.current, { onClick: () => void menuBar.showBuddy() });
-  }, [menuBar]);
+  }, [menuBar, preview]);
   const state = menuBar.state;
   return (
-    <div className="flex h-full items-center justify-center" data-testid="buddy-bubble">
+    <div className="flex h-full items-center justify-center" data-testid={preview ? undefined : 'buddy-bubble'} aria-hidden={preview || undefined}>
       <button
         ref={el}
+        tabIndex={preview ? -1 : undefined}
         aria-label={`PassVault buddy — ${GREETING[state]} Click to open, drag to move.`}
         title={`${GREETING[state]}\nClick to open · drag to move`}
         className={cx('pv-bubble grid size-[78px] cursor-pointer place-items-center overflow-hidden rounded-full', state === 'awaiting_approval' && 'pv-bubble-alert')}

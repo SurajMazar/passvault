@@ -197,3 +197,49 @@ describe('closing the window', () => {
     expect(lock).toHaveBeenCalled();
   });
 });
+
+describe('buddy ↔ bubble morph', () => {
+  async function animated() {
+    const kv = memKv();
+    const f = fakeNl();
+    const log: string[] = [];
+    const mb = new MenuBar({
+      nl: f.nl,
+      kv,
+      setHotKey: async () => undefined,
+      screen: () => SCREEN,
+      motion: { enabled: () => true, wait: async (ms) => void log.push(`wait ${ms} morph=${mb.morph}`) },
+    });
+    await mb.load();
+    return { ...f, mb, log };
+  }
+
+  it('closes the card onto the bubble before the window shrinks', async () => {
+    const { mb, calls, log } = await animated();
+    await mb.showBuddy();
+    calls.length = 0;
+    await mb.showBubble();
+    expect(log.at(-1)).toBe('wait 240 morph=collapsing');
+    expect(calls[0]).toBe('onTop true'); // the window changes only after the morph
+    expect(calls).toContain(`setSize ${BUBBLE_SIZE.width}x${BUBBLE_SIZE.height}`);
+    expect(mb.mode).toBe('bubble');
+    expect(mb.morph).toBeNull();
+  });
+
+  it('grows the window first, then opens the card from the bubble', async () => {
+    const { mb, log } = await animated();
+    await mb.showBubble();
+    log.length = 0;
+    await mb.showBuddy();
+    expect(log).toEqual(['wait 16 morph=expanding-start', 'wait 16 morph=expanding-start', 'wait 240 morph=expanding']);
+    expect(mb.mode).toBe('buddy');
+    expect(mb.morph).toBeNull();
+  });
+
+  it('does not animate without motion (reduced motion or tests)', async () => {
+    const { mb } = await setup();
+    await mb.showBuddy();
+    await mb.showBubble();
+    expect(mb.morph).toBeNull();
+  });
+});

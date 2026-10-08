@@ -60,6 +60,10 @@ const kv = neutralinoKV(nl);
 const menuBar = new MenuBar({
   nl,
   kv,
+  motion: {
+    enabled: () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+  },
   setHotKey: async (sc) => {
     if (!helper.isReady) return; // registered when the helper (re)connects
     if (sc) await helper.request('hotkey.set', helperParams(sc));
@@ -173,6 +177,10 @@ function BuddyLayer({ server }: { server: string }) {
     (cb) => menuBar.subscribe(cb),
     () => menuBar.mode,
   );
+  const morph = useSyncExternalStore(
+    (cb) => menuBar.subscribe(cb),
+    () => menuBar.morph,
+  );
   const s = useSyncExternalStore(
     (cb) => {
       sessionListeners.add(cb);
@@ -192,7 +200,12 @@ function BuddyLayer({ server }: { server: string }) {
   }
   if (mode !== 'buddy' || !s) return null;
   return (
-    <div className="fixed inset-0 z-[55]">
+    <div className={`fixed inset-0 z-[55] pv-morph${morph ? ` pv-morph-${morph}` : ''}`}>
+      {morph && (
+        <div className="pv-morph-avatar">
+          <BuddyBubble menuBar={menuBar} preview />
+        </div>
+      )}
       <BuddyView
         session={s}
         menuBar={menuBar}

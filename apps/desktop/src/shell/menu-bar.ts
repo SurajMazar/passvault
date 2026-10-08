@@ -72,7 +72,20 @@ export interface MenuBarDeps {
   setHotKey: (s: Shortcut | null) => Promise<void>;
   /** screen work area in points (window.screen.avail*) */
   screen: () => { left: number; top: number; width: number; height: number };
+  /** buddy ↔ bubble morph (UI side: BuddyLayer + .pv-morph in desktop.css); absent = no animation */
+  motion?: { enabled(): boolean; wait(ms: number): Promise<void> };
 }
+
+/**
+ * The buddy ↔ bubble morph, drawn by the page while the window keeps its size:
+ *  - collapsing: the card closes like an iris onto the bubble's circle in its top-right
+ *    corner (where the bubble lands) while the avatar fades in; then the window snaps
+ *    to the bubble.
+ *  - expanding-start → expanding: the reverse, after the window has grown (it is
+ *    transparent around the circle, so nothing else shows).
+ */
+export type Morph = 'collapsing' | 'expanding-start' | 'expanding' | null;
+export const MORPH_MS = 240;
 
 export class MenuBar {
   private _mode: WindowMode = 'full';
@@ -82,6 +95,7 @@ export class MenuBar {
   private listeners = new Set<() => void>();
   private shortcutError: string | null = null;
   private _trayError: string | null = null;
+  private _morph: Morph = null;
   private trayRendered = false;
   private switching: Promise<void> = Promise.resolve();
 
@@ -108,6 +122,20 @@ export class MenuBar {
     } catch {
       /* corrupt: defaults */
     }
+  }
+
+  get morph(): Morph {
+    return this._morph;
+  }
+
+  private setMorph(m: Morph) {
+    this._morph = m;
+    this.changed();
+  }
+
+  private get animate() {
+    const m = this.d.motion;
+    return m && m.enabled() ? m : null;
   }
 
   get mode(): WindowMode {
@@ -236,6 +264,13 @@ export class MenuBar {
         from = this._settings.bubblePos ?? undefined;
       } else await this.rememberFull();
       const pos = this.buddyPosition(from);
+      const anim = this._mode === 'bubble' ? this.animate : null;
+      if (anim) {
+        // The card mounts closed onto the bubble's circle; the window grows around it.
+        this._mode = 'buddy';
+        this.setMorph('expanding-start');
+        await anim.wait(16);
+      }
       // Float first: that switches to the buddy's chrome (no title bar), so the size below is the whole window.
       await w.setAlwaysOnTop(true);
       await w.setSize({ ...BUDDY_SIZE, minWidth: 320, minHeight: 420, resizable: false });
@@ -244,6 +279,12 @@ export class MenuBar {
       await w.unminimize().catch(() => undefined);
       await w.focus();
       this._mode = 'buddy';
+      if (anim) {
+        await anim.wait(16);
+        this.setMorph('expanding');
+        await anim.wait(MORPH_MS);
+        this._morph = null;
+      }
       this.changed();
     });
   }
@@ -258,11 +299,17 @@ export class MenuBar {
         from = this._settings.bubblePos ? undefined : (this._settings.buddyPos ?? undefined);
       } else await this.rememberFull();
       const pos = this.bubblePosition(from);
+      const anim = this._mode === 'buddy' ? this.animate : null;
+      if (anim) {
+        this.setMorph('collapsing');
+        await anim.wait(MORPH_MS);
+      }
       await w.setAlwaysOnTop(true); // chrome first (see showBuddy)
       await w.setSize({ ...BUBBLE_SIZE, minWidth: BUBBLE_SIZE.width, minHeight: BUBBLE_SIZE.height, resizable: false });
       await w.move(pos.x, pos.y);
       await w.show();
       this._mode = 'bubble';
+      this._morph = null;
       this.changed();
     });
   }
