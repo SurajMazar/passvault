@@ -1,0 +1,35 @@
+# PassVault API on a shared host (nginx + PostgreSQL already installed).
+# Managed by deploy/server/ci-deploy.sh; secrets live in /opt/passvault/.env (0600, never in git).
+name: passvault
+
+services:
+  api:
+    image: passvault-api:${PV_IMAGE_TAG:?set PV_IMAGE_TAG}
+    restart: unless-stopped
+    env_file: /opt/passvault/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      MIGRATE_ON_START: "true"
+      MAIL_TRANSPORT: smtp
+      TRUST_PROXY: "1"
+      JOBS_ENABLED: "true"
+    ports:
+      # loopback only; nginx terminates TLS and proxies /api
+      - "127.0.0.1:${PV_API_PORT:-3100}:3000"
+    extra_hosts:
+      # the host's PostgreSQL listens on the docker0 address
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s

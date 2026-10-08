@@ -260,17 +260,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
         run: |
           cat > notes.md <<EOF
           ## PassVault ${TAG}
 
+          Server: ${PV_PRODUCTION_URL}
+
           | Artifact | |
           |---|---|
-          | \`PassVault-*-macos-universal*.dmg\` | macOS 14+ (Apple silicon and Intel). Files marked **UNSIGNED** are not notarized: verify the SHA-256 below before opening, then allow it in System Settings → Privacy & Security. |
-          | \`passvault-extension-*.zip\` | Chrome/Chromium MV3 extension (load unpacked, or the Chrome Web Store listing if published). |
+          | \`PassVault-*-macos-universal*.dmg\` | macOS 14+ (Apple silicon and Intel). Files marked **UNSIGNED** are not notarized. |
+          | \`passvault-extension-*.zip\` | Chrome / Edge / Brave extension (Manifest V3). |
           | \`SHA256SUMS.txt\` | Checksums of every artifact. |
 
-          PassVault has not yet been independently audited — see docs/SECURITY_REVIEW.md.
+          ### Install
+
+          **Verify first:** \`shasum -a 256 -c SHA256SUMS.txt --ignore-missing\` → every file must say OK.
+
+          **macOS app**
+          1. Open the .dmg and drag **PassVault** to **Applications**, then open it.
+          2. UNSIGNED build: macOS blocks the first launch — open **System Settings → Privacy & Security**, click **Open Anyway** next to "PassVault was blocked". (Touch ID unlock needs a signed build.)
+          3. The sign-in screen shows **Server · Production**; **Change** switches to local development. Sign in with your email, master password and authenticator code.
+
+          **Chrome extension**
+          1. Unzip \`passvault-extension-*.zip\` into a folder you keep (Chrome loads it from there).
+          2. Open \`chrome://extensions\`, enable **Developer mode**, click **Load unpacked**, choose the folder, and pin PassVault.
+          3. Sign in. **Change** on the sign-in screen selects production, local development or another https server.
+          4. Updating: unzip the new version over the same folder and click **reload** on the extension card.
+
+          New here? Create your account in the web dashboard at ${PV_PRODUCTION_URL} first. Full guide: [docs/INSTALL.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/INSTALL.md).
+
+          PassVault has not yet been independently audited — see docs/SECURITY_REVIEW.md and docs/security/.
           EOF
           flags=""
           [ "$PRERELEASE" = "true" ] && flags="--prerelease"

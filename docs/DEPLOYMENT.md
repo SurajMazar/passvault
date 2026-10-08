@@ -81,6 +81,91 @@ scp deploy/.env.production <user>@<server>:passvault/deploy/.env.production
 
 ---
 
+## 0b. Shared host with nginx + PostgreSQL (CI/CD)
+
+Use this when the server already runs **nginx**, **PostgreSQL** and **Docker**
+for other applications (the production setup). PassVault then adds:
+
+| Piece | Where | Notes |
+|---|---|---|
+| API container `passvault-api` | `127.0.0.1:3100` (any free port, `PV_API_PORT`) | `deploy/server/compose.yaml`; read-only, no capabilities, logs rotated |
+| Database `passvault`, role `passvault` | existing PostgreSQL | reached from Docker networks via `host.docker.internal` (pg_hba: `172.16.0.0/12`) |
+| nginx site | `/etc/nginx/sites-available/passvault.conf` | TLS, security headers, static web app, `/api` → API |
+| TLS certificate `passvault` | `/etc/letsencrypt/live/passvault/` | certbot nginx plugin; renewed by `certbot.timer`, nginx reloaded |
+| Server secrets | `/opt/passvault/.env` (0600) | DB password, MFA key, peppers — generated on the server, never in Git or GitHub |
+| Releases | `/opt/passvault/releases/<commit>` | five newest kept; `web/current` and `current` symlinks |
+
+### One-time setup (as root on the server)
+
+DNS: an A record for your domain must point to the server first.
+
+```bash
+scp -r deploy/server root@SERVER:/root/passvault-setup
+ssh root@SERVER 'cd /root/passvault-setup && PV_DOMAIN=vault.example.com PV_API_PORT=3100 bash setup.sh'
+```
+
+`setup.sh` is idempotent: it creates the directories and secrets, the database
+and role, the certificate and the nginx site (checked with `nginx -t` before
+reloading — other sites are not touched), and installs `/opt/passvault/bin/ci-deploy`.
+
+### CI deploy key (least privilege)
+
+```bash
+ssh-keygen -t ed25519 -N '' -C passvault-ci-deploy -f passvault-ci-deploy
+# on the server, append to /root/.ssh/authorized_keys:
+restrict,command="/opt/passvault/bin/ci-deploy" ssh-ed25519 AAAA… passvault-ci-deploy
+```
+
+That key can only run `ci-deploy` (`deploy <id>` with the release on stdin,
+`status`, `restart`, `rollback`) — no shell, no forwarding.
+
+### GitHub configuration
+
+Settings → Secrets and variables → Actions:
+
+| Kind | Name | Value |
+|---|---|---|
+| Variable | `PV_PRODUCTION_URL` | `https://vault.example.com` (used by deploy **and** the app/extension release builds) |
+| Variable | `DEPLOY_HOST` | server IP or host name |
+| Variable | `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <DEPLOY_HOST>` output |
+| Variable (optional) | `MAIL_FROM` | `PassVault <no-reply@vault.example.com>` |
+| Secret | `DEPLOY_SSH_KEY` | the private key above (`gh secret set DEPLOY_SSH_KEY < passvault-ci-deploy`, then delete the file) |
+| Secret | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` | your mail provider (port 587 + `SMTP_SECURE=false` for STARTTLS, or 465 + `true`) |
+
+The SMTP secrets are written into `/opt/passvault/.env` on every deploy (only
+the `SMTP_*`/`MAIL_FROM` keys are accepted; empty secrets keep the server's
+value). Change a secret, then run **Actions → Deploy → Run workflow** to apply it.
+
+### Releasing and deploying
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+- **Deploy** (`deploy.yml`): builds the API image and the web app, ships them
+  over the restricted key, activates the release, rolls back automatically if
+  the health check fails, and smoke-tests the public URL.
+- **Release** (`release.yml`): builds the macOS app and the Chrome extension for
+  `PV_PRODUCTION_URL` and publishes them with checksums and installation notes
+  ([INSTALL.md](INSTALL.md)).
+
+Run **Deploy** manually for redeploys without a new version. (A release created
+from the Release workflow's manual trigger does not start Deploy automatically —
+GitHub does not trigger workflows from tags created by the workflow token; run
+Deploy by hand in that case.)
+
+### Operating
+
+```bash
+ssh root@SERVER 'SSH_ORIGINAL_COMMAND=status /opt/passvault/bin/ci-deploy'    # current release + container
+ssh root@SERVER 'SSH_ORIGINAL_COMMAND=rollback /opt/passvault/bin/ci-deploy'  # previous release
+ssh root@SERVER 'docker logs --tail 100 passvault-api-1'
+ssh root@SERVER 'tail -f /var/log/nginx/passvault.access.log'
+```
+
+Backups: `pg_dump -Fc passvault` (as the postgres user) plus `/opt/passvault/.env`
+— without `.env` the MFA secrets in the database cannot be decrypted (see §12).
+
 ## 1. Architecture in production
 
 ```

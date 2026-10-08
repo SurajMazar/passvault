@@ -1,0 +1,131 @@
+name: Deploy
+
+# Deploys the API (container image) and the web dashboard to the production
+# server (docs/DEPLOYMENT.md → "Shared host with nginx + PostgreSQL").
+#
+#   git tag v0.2.0 && git push origin v0.2.0      # release + deploy
+#   or: Actions → Deploy → Run workflow           # redeploy main (e.g. after changing SMTP secrets)
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   PV_PRODUCTION_URL    https URL of the server, e.g. https://vault.example.com   [required]
+#   PV_WEB_URL           dashboard URL if different (defaults to PV_PRODUCTION_URL)
+#   DEPLOY_HOST          server address (IP or host name)                          [required]
+#   DEPLOY_USER          SSH user (default root)
+#   DEPLOY_KNOWN_HOSTS   output of `ssh-keyscan -t ed25519 <DEPLOY_HOST>`            [required]
+#   MAIL_FROM            sender, e.g. PassVault <no-reply@example.com> (optional)
+#
+# Repository secrets (Settings → Secrets and variables → Actions → Secrets):
+#   DEPLOY_SSH_KEY       private key whose public half is in the server's authorized_keys as
+#                        restrict,command="/opt/passvault/bin/ci-deploy" …           [required]
+#   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD
+#                        mail provider; written into the server's /opt/passvault/.env on every
+#                        deploy (empty/missing secrets keep the server's current value)
+#
+# Server secrets (database password, MFA key, peppers) are generated on the
+# server by deploy/server/setup.sh and never pass through GitHub.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Check configuration
+        env:
+          PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+        run: |
+          fail=0
+          case "$PV_PRODUCTION_URL" in https://*) ;; *) echo "::error::Set the repository variable PV_PRODUCTION_URL (https://…)"; fail=1 ;; esac
+          [ -n "$DEPLOY_HOST" ] || { echo "::error::Set the repository variable DEPLOY_HOST"; fail=1; }
+          [ -n "$DEPLOY_KNOWN_HOSTS" ] || { echo "::error::Set the repository variable DEPLOY_KNOWN_HOSTS (ssh-keyscan output)"; fail=1; }
+          [ "$HAS_KEY" = "true" ] || { echo "::error::Add the repository secret DEPLOY_SSH_KEY"; fail=1; }
+          exit $fail
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build
+
+      - name: Build web dashboard
+        env:
+          VITE_API_URL: ${{ vars.PV_PRODUCTION_URL }}
+          VITE_WEB_URL: ${{ vars.PV_WEB_URL || vars.PV_PRODUCTION_URL }}
+        run: pnpm --filter @passvault/web build
+
+      - name: Build API image (linux/amd64)
+        id: img
+        run: |
+          ID="$(git rev-parse --short=12 HEAD)"
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          docker build -f apps/api/Containerfile -t "passvault-api:$ID" .
+          mkdir -p release
+          docker save "passvault-api:$ID" | gzip > release/api-image.tar.gz
+          cp -R apps/web/dist release/web
+          cp deploy/server/compose.yaml release/
+          ls -la release
+
+      - name: Mail settings from secrets
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+        run: |
+          umask 077
+          : > release/runtime.env
+          for k in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD MAIL_FROM; do
+            v="${!k}"
+            if [ -n "$v" ]; then
+              case "$v" in *$'\n'*) echo "::error::$k must be a single line"; exit 1 ;; esac
+              printf '%s=%s\n' "$k" "$v" >> release/runtime.env
+              echo "$k: set"
+            else
+              echo "$k: not set (server keeps its current value)"
+            fi
+          done
+
+      - name: Ship and activate
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          ID: ${{ steps.img.outputs.id }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The key may only run /opt/passvault/bin/ci-deploy; the action is passed as the command.
+          tar -C release -czf - . | ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy $ID"
+          rm -f ~/.ssh/deploy_key release/runtime.env
+
+      - name: Smoke test
+        env:
+          PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+        run: |
+          curl -fsS "$PV_PRODUCTION_URL/api/v1/health" | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -fsS -o /dev/null -w "web %{http_code}\n" "$PV_PRODUCTION_URL/"
