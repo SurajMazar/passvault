@@ -63,7 +63,8 @@ HELPER_CMD="$HELPER_CMD" node -e '
   c.extensions = c.extensions.map((e) => e.id === "io.passvault.helper" ? { ...e, commandDarwin: process.env.HELPER_CMD } : e);
   fs.writeFileSync(process.argv[1], JSON.stringify(c, null, 2));
 ' "$BUILD/neu/neutralino.config.json"
-(cd "$BUILD/neu" && neu build >/dev/null)
+# neu CLI pinned as a devDependency (no global install needed, same version locally and in CI)
+(cd "$BUILD/neu" && "$HERE/node_modules/.bin/neu" build >/dev/null)
 RES_NEU="$BUILD/neu/dist/PassVault/resources.neu"
 [[ -f "$RES_NEU" ]] || { echo "neu build did not produce resources.neu" >&2; exit 1; }
 ls -la "$RES_NEU"
