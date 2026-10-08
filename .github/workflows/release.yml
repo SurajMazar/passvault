@@ -147,7 +147,8 @@ jobs:
           cp apps/browser-extension/passvault-extension-*.zip out/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: extension
+          # Uploaded as-is (no wrapper zip): the run page offers the file itself, never a zip inside a zip.
+          archive: false
           path: out/*.zip
           if-no-files-found: error
       - name: Publish to the Chrome Web Store (when credentials are configured)
@@ -267,7 +268,8 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: desktop
+          # Uploaded as-is (no wrapper zip): the run page offers the file itself, never a zip inside a zip.
+          archive: false
           path: out/*.dmg
           if-no-files-found: error
 
@@ -288,6 +290,8 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+          # the extension zip and the DMG are direct uploads: keep them as they are
+          skip-decompress: true
       - name: Checksums
         run: |
           mkdir -p artifacts && cd artifacts
