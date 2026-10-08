@@ -154,6 +154,11 @@ static void PVEnterBuddy(NSWindow *w) {
     oSetFrame(p, @selector(setFrame:display:), w.frame, YES);
     gSyncing = NO;
     oOrder(w, @selector(orderWindow:relativeTo:), NSWindowOut, 0);
+    // AppKit can still bring the stand-in forward without -orderWindow:relativeTo: (app
+    // activation, Dock click, Mission Control). Make it invisible and click-through, so
+    // its empty title bar can never show behind the round buddy.
+    w.alphaValue = 0;
+    w.ignoresMouseEvents = YES;
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
     gMoveObserver = [nc addObserverForName:NSWindowDidMoveNotification object:w queue:nil usingBlock:^(NSNotification *n) { (void)n; PVFollowMain(); }];
     gResizeObserver = [nc addObserverForName:NSWindowDidResizeNotification object:w queue:nil usingBlock:^(NSNotification *n) { (void)n; PVFollowMain(); }];
@@ -179,6 +184,8 @@ static void PVLeaveBuddy(void) {
     oOrder(p, @selector(orderWindow:relativeTo:), NSWindowOut, 0);
     PVSetWebBackground(PVFindWebView(content), YES);
     w.contentView = content;
+    w.ignoresMouseEvents = NO;
+    w.alphaValue = 1;
     gMain = nil;
     if (NSApp.activationPolicy != NSApplicationActivationPolicyRegular) [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 }
