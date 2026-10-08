@@ -3,8 +3,9 @@ name: Deploy
 # Deploys the API (container image) and the web dashboard to the production
 # server (docs/DEPLOYMENT.md → "Shared host with nginx + PostgreSQL").
 #
-#   git tag v0.2.0 && git push origin v0.2.0      # release + deploy
-#   or: Actions → Deploy → Run workflow           # redeploy main (e.g. after changing SMTP secrets)
+#   git push origin main                           # every push to main deploys (after the checks pass)
+#   or: Actions → Deploy → Run workflow on main    # redeploy (e.g. after changing SMTP/DB secrets)
+# Only the main branch can deploy: other branches and tags never do.
 #
 # Repository variables (Settings → Secrets and variables → Actions → Variables):
 #   PV_PRODUCTION_URL    https URL of the server, e.g. https://vault.example.com   [required]
@@ -30,7 +31,7 @@ name: Deploy
 
 on:
   push:
-    tags: ['v*.*.*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -43,11 +44,13 @@ concurrency:
 jobs:
   checks:
     name: Tests (lint, typecheck, unit, API e2e, Go)
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/checks.yml
 
   deploy:
     name: Deploy to production
     needs: checks
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

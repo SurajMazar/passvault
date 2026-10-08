@@ -1,8 +1,10 @@
 name: CI
 
+# Pull requests and branches other than main. Pushes to main run the same
+# checks as the first stage of the Deploy workflow (deploy.yml).
 on:
   push:
-    branches: [main]
+    branches-ignore: [main]
   pull_request:
 
 permissions:

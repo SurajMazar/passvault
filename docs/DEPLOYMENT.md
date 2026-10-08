@@ -143,8 +143,12 @@ before the new version takes traffic.
 ### Releasing and deploying
 
 ```bash
-git tag v0.2.0 && git push origin v0.2.0
+git push origin main                              # deploys the server (after the checks pass)
+git tag v0.2.0 && git push origin v0.2.0          # publishes the macOS app / extension (from a commit on main)
 ```
+
+Only `main` deploys: pushes to other branches and pull requests run the checks
+(`ci.yml`) but never deploy, and a manual Deploy run on another branch is refused.
 
 Both workflows first run **Checks** (`checks.yml`: ESLint, typecheck, unit tests,
 API end-to-end tests on PostgreSQL, builds, dependency audit, Go vet/gofmt/race
@@ -162,10 +166,9 @@ tests, secrets scan). Nothing is deployed or released if any check fails.
   must match the `package.json` version of each app that is rebuilt. Run Release
   manually with *build_apps* to force both (e.g. after a dependency-only update).
 
-Run **Deploy** manually for redeploys without a new version. (A release created
-from the Release workflow's manual trigger does not start Deploy automatically —
-GitHub does not trigger workflows from tags created by the workflow token; run
-Deploy by hand in that case.)
+Run **Deploy** manually (on `main`) to redeploy without new commits, e.g. after
+changing the SMTP or `DATABASE_URL` secrets. Releases must be tagged on a commit
+that is on `main`.
 
 ### Operating
 
