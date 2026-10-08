@@ -42,6 +42,7 @@ export const API_ERROR_CODES = [
   'gone',
   'membership_expired',
   'key_rotation_required',
+  'registration_closed',
   'internal_error',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
@@ -457,4 +458,32 @@ export interface HealthResponse {
   status: 'ok' | 'degraded';
   db: 'ok' | 'error';
   version: string;
+}
+
+/** Version of the HTTP API (`/api/v1`) this server implements, and the oldest it still serves. */
+export const SERVER_API_VERSION = { current: 1, min: 1 } as const;
+
+/** Features a client can rely on; clients refuse servers missing the ones they need. */
+export const SERVER_CAPABILITIES = [
+  'vault.e2ee.v1',
+  'sync.v1',
+  'auth.mfa.totp',
+  'auth.recovery-codes',
+  'sharing.v1',
+  'env-files.v1',
+  'ssh.v1',
+] as const;
+
+/**
+ * `GET /api/v1/meta` — public, unauthenticated, no-store. Lets a client check
+ * that an address is a compatible PassVault server before any credential is
+ * sent. Never exposes configuration beyond these fields.
+ */
+export interface MetaResponse {
+  service: 'passvault';
+  version: string;
+  api: { current: number; min: number };
+  capabilities: string[];
+  /** whether new accounts can be created on this server */
+  registration: 'open' | 'closed';
 }

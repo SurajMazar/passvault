@@ -70,7 +70,7 @@ export function SignIn({ state }: { state: PopupState }) {
       </div>
       {state.server && (
         <div className="mt-5">
-          <ServerSwitch key={state.server.url} server={state.server} />
+          <ServerSwitch key={state.server.url} state={state} />
         </div>
       )}
     </Shell>
@@ -238,7 +238,7 @@ export function Unlock({ state }: { state: PopupState }) {
       </div>
       {state.server && (
         <div className="mt-5">
-          <ServerSwitch key={state.server.url} server={state.server} />
+          <ServerSwitch key={state.server.url} state={state} />
         </div>
       )}
     </Shell>

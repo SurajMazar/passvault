@@ -22,6 +22,7 @@ name: Deploy
 #   MAIL_FROM              sender, e.g. PassVault <no-reply@example.com>
 #   PV_EXTRA_CORS_ORIGINS  extra allowed origins, comma separated (e.g. chrome-extension://<id>)
 #   LOG_LEVEL              API log level (default info)
+#   REGISTRATION_OPEN      false closes sign-up on this server (default true); clients see it in /api/v1/meta
 #   ACME_EMAIL             Let's Encrypt account email (only needed on a host without a certbot account)
 #
 # Repository secrets (Settings → Secrets and variables → Actions → Secrets):
@@ -121,6 +122,7 @@ jobs:
           MAIL_FROM: ${{ vars.MAIL_FROM }}
           PV_EXTRA_CORS_ORIGINS: ${{ vars.PV_EXTRA_CORS_ORIGINS }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          REGISTRATION_OPEN: ${{ vars.REGISTRATION_OPEN }}
           ACME_EMAIL: ${{ vars.ACME_EMAIL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           MFA_ENCRYPTION_KEY: ${{ secrets.MFA_ENCRYPTION_KEY }}
@@ -136,7 +138,7 @@ jobs:
           PV_DOMAIN="$(node -p 'new URL(process.env.PV_PRODUCTION_URL).hostname')"
           export PV_DOMAIN
           : > release/runtime.env
-          for k in PV_DOMAIN PV_API_PORT MAIL_FROM PV_EXTRA_CORS_ORIGINS LOG_LEVEL ACME_EMAIL DATABASE_URL MFA_ENCRYPTION_KEY RECOVERY_CODE_PEPPER PRELOGIN_SECRET SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD; do
+          for k in PV_DOMAIN PV_API_PORT MAIL_FROM PV_EXTRA_CORS_ORIGINS LOG_LEVEL REGISTRATION_OPEN ACME_EMAIL DATABASE_URL MFA_ENCRYPTION_KEY RECOVERY_CODE_PEPPER PRELOGIN_SECRET SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD; do
             v="${!k}"
             case "$v" in *$'\n'*) echo "::error::$k must be a single line"; exit 1 ;; esac
             printf '%s=%s\n' "$k" "$v" >> release/runtime.env
@@ -164,4 +166,6 @@ jobs:
           PV_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
         run: |
           curl -fsS "$PV_PRODUCTION_URL/api/v1/health" | tee /dev/stderr | grep -q '"status":"ok"'
+          # clients check this before connecting (Settings → Server connection)
+          curl -fsS "$PV_PRODUCTION_URL/api/v1/meta" | tee /dev/stderr | grep -q '"service":"passvault"'
           curl -fsS -o /dev/null -w "web %{http_code}\n" "$PV_PRODUCTION_URL/"

@@ -40,6 +40,7 @@ parses or decrypts it.
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | GET | `/health` | none | `{status, db, version}` only; never configuration or secrets |
+| GET | `/meta` | none | `{service: "passvault", version, api: {current, min}, capabilities[], registration: "open"\|"closed"}`; static, `no-store`. Clients check it before connecting to a server ([SERVERS.md](SERVERS.md)) |
 
 ## Authentication
 

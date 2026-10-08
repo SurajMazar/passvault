@@ -19,6 +19,7 @@ import (
 	"github.com/passvault/desktop-helper/internal/sshkeys"
 	"github.com/passvault/desktop-helper/internal/sysevents"
 	"github.com/passvault/desktop-helper/internal/term"
+	"github.com/passvault/desktop-helper/internal/tlscheck"
 	"github.com/passvault/desktop-helper/internal/validate"
 )
 
@@ -29,6 +30,7 @@ type Config struct {
 	SSH      sshconn.Config
 	Opener   *term.Opener
 	Links    *links.Opener
+	TLS      *tlscheck.Inspector
 	Log      *logx.Logger
 }
 
@@ -39,6 +41,7 @@ type App struct {
 	Agent *agentsrv.Server
 	Term  *term.Opener
 	Links *links.Opener
+	TLS   *tlscheck.Inspector
 	cfg   Config
 	log   *logx.Logger
 }
@@ -74,6 +77,10 @@ func New(sender ipc.Sender, cfg Config) *App {
 	a.Links = cfg.Links
 	if a.Links == nil {
 		a.Links = &links.Opener{}
+	}
+	a.TLS = cfg.TLS
+	if a.TLS == nil {
+		a.TLS = &tlscheck.Inspector{}
 	}
 	a.Term.AgentSocket = func() (string, bool) {
 		running, p, _, _ := a.Agent.Status()
@@ -315,6 +322,7 @@ func (a *App) register() {
 				"agent":        true,
 				"terminal":     true,
 				"links":        true,
+				"tlsInspect":   true,
 				"systemEvents": sysevents.Available(),
 			},
 		}, nil
@@ -451,6 +459,11 @@ func (a *App) register() {
 		return nil, a.Links.Open(p.URL)
 	})
 
+	// Server connection test: explains a refused certificate (handshake only, nothing sent).
+	ipc.Register(d, "net.inspectTls", ipc.Opts{}, func(ctx context.Context, _ *ipc.Session, p *linkOpenP) (any, error) {
+		return a.TLS.Inspect(ctx, p.URL)
+	})
+
 	// Files.
 	ipc.Register(d, "fs.writeExport", ipc.Opts{}, func(_ context.Context, _ *ipc.Session, p *writeExportP) (any, error) {
 		content, err := b64(p.ContentB64, fsops.MaxFileBytes)
@@ -479,5 +492,5 @@ func Ops() []string {
 		"biometric.status", "ssh.connect", "ssh.hostKeyDecision", "ssh.promptResponse", "ssh.write",
 		"ssh.resize", "ssh.disconnect", "ssh.test", "ssh.keygen", "ssh.inspectKey", "agent.status",
 		"agent.start", "agent.stop", "agent.addKey", "agent.removeKey", "agent.signDecision",
-		"term.openExternal", "link.open", "fs.writeExport", "fs.readImport"}
+		"term.openExternal", "link.open", "net.inspectTls", "fs.writeExport", "fs.readImport"}
 }

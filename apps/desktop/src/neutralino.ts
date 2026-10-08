@@ -31,6 +31,7 @@ export interface NeutralinoLike {
     getData(key: string): Promise<string>;
     setData(key: string, data: string | null): Promise<unknown>;
     removeData(key: string): Promise<unknown>;
+    getKeys(): Promise<string[]>;
   };
   clipboard: {
     readText(): Promise<string>;

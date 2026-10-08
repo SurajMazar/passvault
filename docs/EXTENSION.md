@@ -34,41 +34,35 @@ set them in the shell or in `apps/browser-extension/.env.production` or
 
 | Variable       | Default                 | Effect |
 | -------------- | ----------------------- | ------ |
-| `VITE_API_URL` (or `VITE_PRODUCTION_URL`) | unset | The built-in **production server** (an `https://` origin; loopback values are ignored). It is the first server on a fresh install, a one-click shortcut in the server picker, and the **only** entry in `host_permissions` (`<origin>/*`). Without it the extension starts on local development and `host_permissions` is `http://localhost:3000/*`. |
+| `VITE_API_URL` (or `VITE_PRODUCTION_URL`) | unset | The built-in **production server** (an `https://` base URL; loopback values are ignored). It is the first saved server on a fresh install — a suggestion, not a restriction — and the **only** entry in `host_permissions` (`<origin>/*`). Without it the extension starts on local development and `host_permissions` is `http://localhost:3000/*`. |
 | `VITE_WEB_URL` | the production server | Dashboard URL for the production server ("Open dashboard", "Create an account", "Finish in the dashboard"). Local development uses `http://localhost:5173`; any other server uses its own origin. |
 
 Example: `VITE_API_URL=https://vault.example.com pnpm --filter @passvault/browser-extension build`.
 
-### Servers (local, production, or any address)
+### Server connection (editable at any time)
 
-The server is chosen in the popup, on the sign-in and lock screens:
-**Server · <host> → Change**. The address field is editable; **Production**
-and **Local development** are one-click shortcuts that fill it.
+The server is set in the popup — **Settings → Server connection**, or
+**Server · … → Change** on the sign-in and lock screens — and can be changed
+at any time. Full behaviour, rules and isolation: [SERVERS.md](SERVERS.md).
 
-- Accepted: `https://host[:port]`, or `http://` for `localhost`, `127.0.0.1`
-  and `[::1]` only. Paths, queries, credentials and other schemes are refused
-  (shared `normalizeServerUrl` in `@passvault/vault-core/servers`, also used by
-  the desktop app).
-- **Host access is granted per server by Chrome.** On **Connect** the popup
-  calls `chrome.permissions.request({ origins: ['<server>/*'] })` from the
-  click (an `optional_host_permissions` entry), so Chrome shows its own
-  prompt for any server that is not the built-in one. The background refuses
-  to switch unless `chrome.permissions.contains` confirms access.
-- The background probes `GET /api/v1/health` before switching; if the server
-  is unreachable the popup offers **Switch anyway** (useful for unlocking the
-  offline copy of a server that is down).
-- **Switching locks the vault** (resume key removed, pending captured
-  passwords dropped) and rebuilds the session for the new server. The
-  selection is stored in `chrome.storage.local` `pv.server`.
-- **Each server has its own namespace**: session token, device id, last
-  email and trusted-device tokens under `pv.<scope>.*`, and the encrypted
-  cache in IndexedDB `passvault-ext-<scope>-<account>`, where `<scope>` is
-  derived from the origin (e.g. `https_vault_example_com_443`,
-  `http_localhost_3000`). Switching back finds the previous account locked
-  and unlocks with its master password. Data from installs made before this
-  feature is moved under the build-time server once.
-- Only the popup can switch servers (`server.set` is a privileged message;
-  content scripts and other extensions are refused).
+- Editable **Server URL** (prefilled), **Test connection**, **Save changes**,
+  **Cancel**; saved servers to switch back to; **Local development servers**
+  setting for `http://localhost`.
+- Any compatible server: `https://`, optionally under a path prefix. A new
+  address is applied only after the compatibility check (`GET /api/v1/meta`,
+  no credentials) passes; otherwise nothing changes.
+- **Host access is granted per server by Chrome.** Test/Save call
+  `chrome.permissions.request({ origins: ['<origin>/*'] })` from the click
+  (an `optional_host_permissions` entry); the background refuses to check or
+  switch unless `chrome.permissions.contains` confirms access.
+- **Changing the server locks the vault** (resume key removed), ends the
+  session (`dispose`: in-flight requests cancelled, half-finished sign-in and
+  pending captured passwords dropped) and starts a new one for the new server.
+- **Each server has its own namespace** (`pv.<scope>.*`, IndexedDB
+  `passvault-ext-<scope>-<account>`); saved servers in `pv.servers`.
+- Only the popup can change servers (`server.check`, `server.set`,
+  `server.switch`, `server.rename`, `server.remove`, `server.localDev` are
+  privileged messages; content scripts and other extensions are refused).
 
 The service worker sends API requests with the host permission, so the API
 does not need a CORS entry for the extension. If the API ever enforces an
@@ -110,7 +104,7 @@ to `chrome.scripting.executeScript({ func, args })`.
 | `offscreen` | An offscreen document (reason `CLIPBOARD`) clears the clipboard after the configured timeout. The service worker has no clipboard access, and the popup is usually closed by then. | none |
 | `clipboardWrite` | Lets the offscreen document write an empty string to the clipboard without a user gesture. | may show "Modify data you copy and paste" |
 | `host_permissions: [<default server origin>/*]` | API calls from the service worker to the built-in server (production, else `http://localhost:3000`). | "Read and change your data on <api host>" |
-| `optional_host_permissions: [https://*/*, http://*/*]` | Requested at runtime only: **all sites** if the user enables "Offer to save passwords" (lets the opt-in content script notice login form submissions), or **one origin** when the user switches to another server. Removable at any time. | "Read and change all your data on all websites" (when enabling the save prompt) or "… on <server host>" (when switching server) |
+| `optional_host_permissions: [https://*/*, http://*/*]` | Requested at runtime only: **all sites** if the user enables "Offer to save passwords" (lets the opt-in content script notice login form submissions), or **one origin** when the user tests or connects to another server. Removable at any time. | "Read and change all your data on all websites" (when enabling the save prompt) or "… on <server host>" (when switching server) |
 
 Deliberately **not** requested: `<all_urls>` or any other website host
 permission, `tabs`, `webRequest`, `cookies`, `nativeMessaging`, content

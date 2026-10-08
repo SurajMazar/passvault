@@ -10,7 +10,7 @@ export class ApiError extends Error {
   override name = 'ApiError';
   constructor(
     public readonly status: number,
-    public readonly code: T.ApiErrorCode | 'network_error' | 'offline',
+    public readonly code: T.ApiErrorCode | 'network_error' | 'offline' | 'cancelled',
     message: string,
     public readonly details?: unknown,
     public readonly requestId?: string,
@@ -20,8 +20,9 @@ export class ApiError extends Error {
   get isConflict() {
     return this.code === 'revision_conflict';
   }
+  /** No answer from the server; queued changes stay pending (a cancelled request is retried later too). */
   get isNetwork() {
-    return this.code === 'network_error' || this.code === 'offline';
+    return this.code === 'network_error' || this.code === 'offline' || this.code === 'cancelled';
   }
 }
 
@@ -38,12 +39,25 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export class ApiClient {
   private readonly base: string;
+  /** in-flight requests, so a server switch can cancel them (abortAll) */
+  private readonly inflight = new Set<AbortController>();
+  private closed = false;
   constructor(private readonly opts: ApiClientOptions) {
     this.base = opts.baseUrl.replace(/\/+$/, '');
   }
 
   get baseUrl() {
     return this.base;
+  }
+
+  /**
+   * Cancels every in-flight request and refuses new ones. Used when the client
+   * switches servers: nothing started for the old server may finish later.
+   */
+  abortAll(): void {
+    this.closed = true;
+    for (const c of this.inflight) c.abort();
+    this.inflight.clear();
   }
 
   async request<R>(method: Method, path: string, body?: unknown, opts: { auth?: boolean; query?: Record<string, string | number | undefined> } = {}): Promise<R> {
@@ -55,7 +69,9 @@ export class ApiClient {
       const token = this.opts.getToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
     }
+    if (this.closed) throw new ApiError(0, 'cancelled', 'This connection was closed (server changed)');
     const ctrl = new AbortController();
+    this.inflight.add(ctrl);
     const timer = setTimeout(() => ctrl.abort(), this.opts.timeoutMs ?? 30_000);
     let res: Response;
     try {
@@ -68,10 +84,12 @@ export class ApiClient {
         cache: 'no-store',
       });
     } catch (e) {
+      if (this.closed) throw new ApiError(0, 'cancelled', 'This connection was closed (server changed)');
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
       throw new ApiError(0, offline ? 'offline' : 'network_error', offline ? 'You are offline' : 'Could not reach the PassVault server');
     } finally {
       clearTimeout(timer);
+      this.inflight.delete(ctrl);
     }
     if (res.status === 204) return undefined as R;
     let json: unknown = null;

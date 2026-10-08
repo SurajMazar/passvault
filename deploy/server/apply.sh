@@ -87,6 +87,8 @@ for k in ("MFA_ENCRYPTION_KEY", "RECOVERY_CODE_PEPPER", "PRELOGIN_SECRET"):
     if len(need(k)) < 32: sys.exit(f"{k} is too short (use: openssl rand -base64 32)")
 for k in ("SMTP_HOST", "SMTP_PORT"):
     need(k)
+registration = (env.get("REGISTRATION_OPEN") or "true").strip().lower()
+if registration not in ("true", "false"): sys.exit("REGISTRATION_OPEN must be true or false")
 
 cors = [f"https://{domain}", "http://localhost:47391"]
 cors += [o.strip() for o in env.get("PV_EXTRA_CORS_ORIGINS", "").split(",") if o.strip()]
@@ -105,6 +107,7 @@ api = {
     "SMTP_USER": env.get("SMTP_USER", ""),
     "SMTP_PASSWORD": env.get("SMTP_PASSWORD", ""),
     "LOG_LEVEL": env.get("LOG_LEVEL") or "info",
+    "REGISTRATION_OPEN": registration,
 }
 
 def quote(v):  # docker compose env_file syntax

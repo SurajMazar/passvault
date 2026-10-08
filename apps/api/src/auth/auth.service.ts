@@ -67,6 +67,7 @@ export class AuthService {
   //   register        -> consumes the token, creates the (verified) account
 
   async registerStart(body: In<typeof V.registerStartRequest>, meta: RequestMeta): Promise<void> {
+    if (!this.cfg.REGISTRATION_OPEN) throw E.registrationClosed();
     this.limiter.hit('register-start', body.email, 5, WINDOW_HOUR);
     const existing = await this.prisma.user.findUnique({ where: { email: body.email }, select: { id: true } });
     if (existing) {
@@ -114,6 +115,7 @@ export class AuthService {
   }
 
   async register(body: In<typeof V.registerRequest>, meta: RequestMeta): Promise<T.RegisterResponse> {
+    if (!this.cfg.REGISTRATION_OPEN) throw E.registrationClosed();
     this.limiter.hit('register', body.email);
     const pending = await this.prisma.pendingRegistration.findUnique({ where: { tokenHash: sha256Hex(body.registrationToken) } });
     const now = new Date();

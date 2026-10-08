@@ -128,6 +128,7 @@ Settings → Secrets and variables → Actions:
 | Variable (optional) | `PV_API_PORT` | loopback port for the API (default `3100`; must be free) |
 | Variable (optional) | `MAIL_FROM` | `PassVault <no-reply@vault.example.com>` |
 | Variable (optional) | `PV_EXTRA_CORS_ORIGINS` | e.g. `chrome-extension://<id>` |
+| Variable (optional) | `REGISTRATION_OPEN` | `false` closes sign-up (default `true`); clients see it in `/api/v1/meta` |
 | Secret | `DEPLOY_SSH_KEY` | the private key (`gh secret set DEPLOY_SSH_KEY < passvault-ci-deploy`, then delete the file) |
 | Secret | `DATABASE_URL` | `postgresql://passvault:PASSWORD@host.docker.internal:5432/passvault` (the host's PostgreSQL; role and database are created/updated to match) or any external PostgreSQL URL |
 | Secret | `MFA_ENCRYPTION_KEY`, `RECOVERY_CODE_PEPPER`, `PRELOGIN_SECRET` | `openssl rand -base64 32` each — **never change them once users exist** (MFA secrets and recovery codes depend on them) |
@@ -277,6 +278,7 @@ openssl rand -base64 32   # run three times: MFA_ENCRYPTION_KEY, RECOVERY_CODE_P
 | `PRELOGIN_SECRET` | deterministic decoy KDF params for unknown emails | harmless to rotate, but keep stable to avoid enumeration side channels |
 | `PV_DOMAIN`, `PV_ACME_EMAIL` | public hostname, ACME contact | — |
 | `CORS_ORIGINS` | exact browser origins allowed to call the API | clients get CORS errors |
+| `REGISTRATION_OPEN` | `false` closes sign-up; existing accounts unaffected (default `true`) | `register/start` and `register` answer 403 `registration_closed` |
 | `SMTP_*`, `MAIL_FROM` | transactional email | registration/recovery mails fail |
 
 The API validates configuration at startup and **refuses to boot** in

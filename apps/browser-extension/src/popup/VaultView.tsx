@@ -33,6 +33,7 @@ import {
 import type { ItemDetail, ItemSummary, LoginMatch, MatchesResponse, PopupState } from '../shared/protocol';
 import { openDashboard } from './AuthViews';
 import { AutoSaveSettings } from './AutoSaveSettings';
+import { ServerSettings } from './ServerSwitch';
 import { Generator } from './Generator';
 import { activeTabId, call, copyToClipboard, errorText } from './rpc';
 import { SaveLogin } from './SaveLogin';
@@ -69,7 +70,11 @@ export function VaultView({ state }: { state: PopupState }) {
         {tab === 'generator' && route.view === 'list' ? (
           <Generator />
         ) : tab === 'settings' && route.view === 'list' ? (
-          <AutoSaveSettings />
+          <>
+            <ServerSettings state={state} />
+            <div className="border-t border-border" />
+            <AutoSaveSettings />
+          </>
         ) : route.view === 'detail' ? (
           <Detail id={route.id} tabId={tabId} dataVersion={state.dataVersion} onBack={() => setRoute({ view: 'list' })} />
         ) : route.view === 'save' && tabId !== null ? (

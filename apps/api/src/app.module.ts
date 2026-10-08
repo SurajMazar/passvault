@@ -32,6 +32,7 @@ import { RecordsService } from './records/records.service';
 import { RecordsController } from './records/records.controller';
 import { SyncController } from './sync/sync.controller';
 import { HealthController } from './health/health.controller';
+import { MetaController } from './health/meta.controller';
 import { JobsService } from './jobs/jobs.service';
 
 export interface AppModuleOptions {
@@ -62,6 +63,7 @@ export class AppModule {
       ],
       controllers: [
         HealthController,
+        MetaController,
         AuthController,
         AccountController,
         RecoveryController,

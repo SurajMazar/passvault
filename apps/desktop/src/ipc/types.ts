@@ -71,6 +71,9 @@ export interface HelloResult {
     biometrics: { available: boolean; reason: string };
     agent: boolean;
     terminal: boolean;
+    links?: boolean;
+    /** net.inspectTls: certificate diagnosis for the server connection test */
+    tlsInspect?: boolean;
     systemEvents: boolean;
   };
 }

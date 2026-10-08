@@ -43,7 +43,10 @@ pnpm exec tsc --noEmit -p tsconfig.json
 pnpm exec vite build --mode production
 grep -q 'Content-Security-Policy' resources/app/index.html || { echo "CSP meta missing from index.html" >&2; exit 1; }
 API_ORIGIN="$(node -p "new URL(process.argv[1]).origin" "$API_URL")"
-grep -q "connect-src[^\"]*$API_ORIGIN" resources/app/index.html || { echo "CSP connect-src does not include $API_ORIGIN" >&2; exit 1; }
+CONNECT="$(sed -n 's/.*connect-src \([^;]*\);.*/\1/p' resources/app/index.html)"
+# Any https server the user chooses; never plain http beyond localhost, never wildcards.
+echo " $CONNECT " | grep -q ' https: ' || { echo "CSP connect-src must allow https: servers" >&2; exit 1; }
+echo " $CONNECT " | grep -Eq ' (http:|\*|http://\*[^ ]*) ' && { echo "CSP connect-src too broad: $CONNECT" >&2; exit 1; }
 grep -qF "$API_ORIGIN" resources/app/assets/index-*.js || { echo "API URL $API_ORIGIN not compiled into the bundle" >&2; exit 1; }
 
 log "resources.neu (neu build)"

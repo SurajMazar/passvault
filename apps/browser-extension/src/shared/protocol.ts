@@ -1,3 +1,5 @@
+import type { ServerProfileView } from '@passvault/ui';
+import type { ServerCheck } from '@passvault/vault-core/servers';
 import { z } from 'zod';
 import type { ItemType, UrlMatchMode } from '@passvault/types';
 import { type OFFSCREEN_TARGET } from './constants';
@@ -88,9 +90,15 @@ export const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('autosave.status') }).strict(),
   z.object({ type: z.literal('autosave.set'), enabled: z.boolean() }).strict(),
   z.object({ type: z.literal('autosave.clearNever') }).strict(),
-  // Switch server. The popup requests host access for it first (Chrome permission prompt);
-  // `force` skips the reachability check ("Switch anyway").
-  z.object({ type: z.literal('server.set'), url: z.string().min(1).max(2048), force: z.boolean().optional() }).strict(),
+  // Server connection. The popup requests host access for an address first (Chrome
+  // permission prompt). A new address is applied only after a successful
+  // compatibility check; a saved server can be switched to offline (cached data).
+  z.object({ type: z.literal('server.check'), url: z.string().min(1).max(2048) }).strict(),
+  z.object({ type: z.literal('server.set'), url: z.string().min(1).max(2048) }).strict(),
+  z.object({ type: z.literal('server.switch'), id: z.string().min(1).max(200) }).strict(),
+  z.object({ type: z.literal('server.rename'), id: z.string().min(1).max(200), name: z.string().min(1).max(80) }).strict(),
+  z.object({ type: z.literal('server.remove'), id: z.string().min(1).max(200) }).strict(),
+  z.object({ type: z.literal('server.localDev'), on: z.boolean() }).strict(),
 ]);
 
 export type Request = z.infer<typeof requestSchema>;
@@ -139,9 +147,12 @@ export interface PopupState {
 }
 
 export interface ServerInfo {
-  /** API origin, e.g. https://vault.example.com or http://localhost:3000 */
+  /** base URL of the connected server, e.g. https://vault.example.com or https://example.com/passvault */
   url: string;
-  presets: Array<{ id: 'production' | 'local'; label: string; url: string }>;
+  /** explicit local-development setting (http:// allowed for loopback addresses) */
+  localDev: boolean;
+  /** saved servers, the connected one included (`active`) */
+  profiles: ServerProfileView[];
 }
 
 /** List row. Never contains secret values. */
@@ -267,7 +278,12 @@ export interface ResponseMap {
   'autosave.status': AutoSaveStatus;
   'autosave.set': AutoSaveStatus;
   'autosave.clearNever': AutoSaveStatus;
+  'server.check': ServerCheck;
   'server.set': { url: string };
+  'server.switch': { url: string };
+  'server.rename': { ok: true };
+  'server.remove': { ok: true };
+  'server.localDev': { localDev: boolean };
 }
 
 /** "Offer to save passwords" setting (requires the optional all-sites host permission). */

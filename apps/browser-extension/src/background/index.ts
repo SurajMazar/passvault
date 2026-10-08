@@ -6,21 +6,19 @@
  * them after suspension; they delegate to the runtime of the selected server.
  */
 import { VaultSession } from '@passvault/vault-core';
-import { normalizeServerUrl, probeServer } from '@passvault/vault-core/servers';
 import { PRODUCTION_API_URL, PRODUCTION_WEB_URL } from '../shared/config';
 import { OFFSCREEN_TARGET, POPUP_PORT, type PortMessageToPopup } from '../shared/protocol';
 import type { ChromeLike } from './chrome-api';
-import { BackgroundController, ControllerError } from './controller';
+import { BackgroundController } from './controller';
 import { createLogger } from './log';
 import { createExtensionPlatform, tokenKey } from './platform';
 import { checkSender } from './sender';
 import { SavePromptManager } from './save-prompt';
-import { SELECTED_SERVER_KEY, defaultServer, loadSelectedServer, migrateLegacyStorage, serverPresets, serverScope, webUrlFor } from './servers';
+import { ServerManager, defaultServer, loadProfiles, migrateLegacyStorage, serverScope, webUrlFor } from './servers';
 
 const c = chrome as unknown as ChromeLike;
 // Diagnostics: fixed event names and codes only. Never message payloads.
 const log = createLogger();
-const PRESETS = serverPresets(PRODUCTION_API_URL);
 const DEFAULT_SERVER = defaultServer(PRODUCTION_API_URL);
 
 interface Runtime {
@@ -30,14 +28,14 @@ interface Runtime {
   savePrompt: SavePromptManager;
 }
 
-/** Everything bound to one server. Switching servers replaces the whole runtime. */
-function boot(server: string): Runtime {
+/** Everything bound to one server. Changing servers replaces the whole runtime. */
+function boot(server: string, servers: ServerManager): Runtime {
   const scope = serverScope(server);
   const webUrl = webUrlFor(server, PRODUCTION_API_URL, PRODUCTION_WEB_URL);
   const platform = createExtensionPlatform(c, { apiBaseUrl: server, webAppUrl: webUrl, scope });
   const session = new VaultSession(platform);
   // Never offer to save passwords typed into PassVault's own pages.
-  const savePrompt = new SavePromptManager(c, session, [...new Set([new URL(webUrl).origin, server])]);
+  const savePrompt = new SavePromptManager(c, session, [...new Set([new URL(webUrl).origin, new URL(server).origin])]);
   const controller = new BackgroundController({
     chrome: c,
     session,
@@ -45,16 +43,44 @@ function boot(server: string): Runtime {
     log,
     savePrompt,
     tokenKey: tokenKey(scope),
-    server: { url: server, presets: PRESETS, switchTo: switchServer },
+    server: servers,
   });
   void savePrompt.syncRegistration().catch(() => log('autosave registration failed'));
   controller.ready.catch(() => log('startup failed'));
   return { server, session, controller, savePrompt };
 }
 
+/**
+ * Lock the current server's vault, cancel everything still in flight for it
+ * (requests, a half-finished sign-in, pending save prompts) and start over on
+ * another server. The previous server keeps its locked sign-in and encrypted
+ * cache under its own namespace; nothing is copied between servers.
+ */
+async function activate(url: string, servers: ServerManager): Promise<void> {
+  const rt = await current;
+  log('server switch');
+  await rt.controller.lock('server switch');
+  rt.session.dispose();
+  await rt.savePrompt.clearAll();
+  const next = boot(url, servers);
+  current = Promise.resolve(next);
+  await next.controller.ready.catch(() => undefined);
+  for (const [port, off] of ports) {
+    off();
+    ports.set(port, attach(port, next));
+  }
+}
+
 let current: Promise<Runtime> = (async () => {
   await migrateLegacyStorage(c.storage.local, DEFAULT_SERVER).catch(() => log('storage migration failed'));
-  return boot(await loadSelectedServer(c.storage.local, DEFAULT_SERVER));
+  // No production server in this build (local development build): local servers are allowed by default.
+  const state = await loadProfiles(c.storage.local, { productionUrl: PRODUCTION_API_URL, localDevDefault: !PRODUCTION_API_URL || import.meta.env.DEV });
+  const servers: ServerManager = new ServerManager(c, state, {
+    activate: (url) => activate(url, servers),
+    changed: () => void current.then((rt) => rt.controller.pushState()),
+  });
+  await servers.refresh();
+  return boot(servers.activeUrl, servers);
 })();
 
 /** Open popup ports and their state subscriptions (re-attached on a server switch). */
@@ -71,46 +97,6 @@ function attach(port: chrome.runtime.Port, rt: Runtime): () => void {
   const off = rt.controller.onState(send);
   void rt.controller.ready.then(() => send(rt.controller.popupState()));
   return off;
-}
-
-let switching: Promise<string> | null = null;
-
-/**
- * Lock the current server's vault and start over on another server. The
- * previous server keeps its (locked) sign-in and encrypted cache, so switching
- * back only needs the master password.
- */
-async function switchServer(url: string, force: boolean): Promise<string> {
-  const origin = normalizeServerUrl(url);
-  if (switching) throw new ControllerError('bad_state', 'A server switch is already in progress.');
-  const run = async () => {
-    const rt = await current;
-    if (origin === rt.server) return origin;
-    const granted = (await c.permissions?.contains({ origins: [`${origin}/*`] })) ?? false;
-    if (!granted) throw new ControllerError('refused', `PassVault is not allowed to connect to ${new URL(origin).host}. Allow access when Chrome asks.`);
-    if (!force) {
-      const probe = await probeServer(origin);
-      if (!probe.ok) throw new ControllerError('network', probe.message);
-    }
-    log('server switch');
-    await rt.controller.lock('server switch');
-    await rt.savePrompt.clearAll();
-    await c.storage.local.set({ [SELECTED_SERVER_KEY]: origin });
-    const next = boot(origin);
-    current = Promise.resolve(next);
-    await next.controller.ready.catch(() => undefined);
-    for (const [port, off] of ports) {
-      off();
-      ports.set(port, attach(port, next));
-    }
-    return origin;
-  };
-  switching = run();
-  try {
-    return await switching;
-  } finally {
-    switching = null;
-  }
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {

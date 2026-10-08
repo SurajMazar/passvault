@@ -16,7 +16,7 @@ SSH terminal and an SSH agent.
 
 ## Quick start (development)
 
-Requirements: Node 24 LTS (see `.nvmrc`), pnpm 10, Go 1.25 (desktop helper), Podman (or a local
+Requirements: Node 24 LTS (see `.nvmrc`), pnpm 10, Go 1.27 (desktop helper), Podman (or a local
 PostgreSQL 14+), macOS for the desktop app.
 
 ```bash
@@ -72,6 +72,7 @@ cd native/desktop-helper && make test
 | Sync & offline | [docs/SYNC.md](docs/SYNC.md) |
 | `.env` syntax & editing | [docs/ENV_FILES.md](docs/ENV_FILES.md) |
 | User journeys | [docs/USER_JOURNEYS.md](docs/USER_JOURNEYS.md) |
+| Server connection: custom servers, saved servers, compatibility check | [docs/SERVERS.md](docs/SERVERS.md) |
 | Browser extension | [docs/EXTENSION.md](docs/EXTENSION.md) |
 | Desktop app, packaging, signing | [docs/DESKTOP.md](docs/DESKTOP.md) |
 | Desktop helper & IPC | [docs/DESKTOP_HELPER.md](docs/DESKTOP_HELPER.md), [docs/DESKTOP_IPC.md](docs/DESKTOP_IPC.md) |

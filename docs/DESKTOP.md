@@ -253,7 +253,7 @@ Prerequisites:
 
 - macOS 14+ (the Neutralinojs 6.10 binaries have `minos 14.0`);
 - Node 24 LTS (`.nvmrc`) and pnpm 10;
-- Go 1.25 and the Xcode Command Line Tools (`clang`, `lipo`, `codesign`, `sips`, `iconutil`, `hdiutil`);
+- Go 1.27 and the Xcode Command Line Tools (`clang`, `lipo`, `codesign`, `sips`, `iconutil`, `hdiutil`);
 - the `neu` CLI v11 (`npm i -g @neutralinojs/neu`).
 
 ```sh
@@ -285,29 +285,36 @@ Run: `open apps/desktop/dist/PassVault.app`. Logs:
 
 The server needs port 47391 to be free.
 
-### Servers: production and local development
+### Server connection (editable at any time)
 
-The app can talk to exactly two servers, switchable at runtime from the
-sign-in/lock screen (**Server · Change**) or **Settings → Server**:
+The app connects to any compatible PassVault server the user chooses, changeable
+at any time from **Settings → Server connection** or the sign-in/lock screen
+(**Server · … → Change**). Full behaviour, rules and isolation:
+[SERVERS.md](SERVERS.md).
 
-| Option | Origin | Where it comes from |
-|---|---|---|
-| **Server** (production) | your HTTPS deployment | build-time `VITE_PRODUCTION_URL`, or `VITE_API_URL` of a production build — read from the gitignored `apps/desktop/.env.production` (copy `.env.production.example`) or, in CI, the repository variable `PV_PRODUCTION_URL`. Never hard-coded in the repository. |
-| **Local development** | `http://localhost:3000` | fixed |
-
+- **Default server:** build-time `VITE_PRODUCTION_URL`, or `VITE_API_URL` of a
+  production build — read from the gitignored `apps/desktop/.env.production`
+  (copy `.env.production.example`) or, in CI, the repository variable
+  `PV_PRODUCTION_URL`. It is only the first saved server; never hard-coded in
+  the repository, never a restriction.
+- **Changing the server** runs the compatibility check first (nothing changes
+  if it fails), asks for confirmation when a vault is unlocked, then ends the
+  session (`dispose`: keys wiped, SSH sessions closed, agent keys cleared,
+  in-flight requests cancelled) and remounts the UI against the new server.
+  The previous server stays saved; its data stays encrypted on the Mac.
+- **TLS diagnosis:** when the webview cannot connect to an `https://` server,
+  the helper's `net.inspectTls` repeats only the TLS handshake with the macOS
+  trust store and names the problem (expired, wrong host name, untrusted CA)
+  or, if the certificate is fine, the missing CORS entry.
 - **Isolation:** each server has its own Keychain session-token account
-  (`pv.session.<scope>`), its own preferences (device id, last email,
-  trusted-device tokens) and its own encrypted cache namespace, so switching
-  never mixes accounts or ciphertext. The selected server is remembered.
-- **Switching** asks for confirmation when a vault is unlocked, then locks it
-  (wiping keys, disconnecting app-managed SSH sessions, clearing agent keys) and
-  remounts the UI against the other server. Data from the previous server stays
-  encrypted on the Mac and is available again after switching back.
-- **Validation:** only the two configured origins are accepted (`https://`, or
-  `http://` for localhost); a tampered stored value falls back to the default.
-- **CSP:** `connect-src` lists exactly these origins (plus the loopback
-  Neutralino WebSocket); `scripts/build.sh` fails if the built CSP or bundle
-  lacks the expected production origin.
+  (`pv.session.<scope>`), preferences (`pvp_<scope>_*`) and encrypted cache
+  (`pvc_<scope>_*`); saved servers in `pvg_servers`. **Remove** deletes a
+  saved server's token, prefs and cache (`storage.getKeys` lists key names for
+  this; it is on the native allowlist for that reason only).
+- **CSP:** `connect-src 'self' ws://localhost:<port> ws://127.0.0.1:<port>
+  https: http://localhost:* http://127.0.0.1:*` — any https server the user
+  chooses, plain http only on this computer, never `http:` in general or `*`.
+  `scripts/build.sh` fails if the built CSP is broader or lacks `https:`.
 - To build for another deployment set `VITE_API_URL` / `VITE_WEB_URL`
   (and optionally `VITE_PRODUCTION_URL`) in the environment:
 
@@ -315,7 +322,8 @@ sign-in/lock screen (**Server · Change**) or **Settings → Server**:
   VITE_API_URL=https://vault.example.com VITE_WEB_URL=https://vault.example.com pnpm --filter @passvault/desktop package
   ```
 
-- The desktop UI's origin is `http://localhost:47391`, so the API's CORS allow list must include it in every environment.
+- The desktop UI's origin is `http://localhost:47391`, so the CORS allow list
+  of every server it connects to must include it.
 
 ### Development
 

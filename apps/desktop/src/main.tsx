@@ -1,4 +1,4 @@
-import { StrictMode, useCallback, useMemo, useState } from 'react';
+import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as NL from '@neutralinojs/lib';
 import '@xterm/xterm/css/xterm.css';
@@ -10,8 +10,8 @@ import { helperTransport, type NeutralinoLike } from './neutralino';
 import { DesktopController } from './desktop/controller';
 import { HelperConnection } from './desktop/helper-connection';
 import { DesktopClipboard } from './platform/clipboard';
-import { createDesktopPlatform } from './platform/desktop-platform';
-import { loadSelectedServer, saveSelectedServer, serverScope, webAppUrlFor } from './platform/servers';
+import { createDesktopPlatform, sessionTokenAccount } from './platform/desktop-platform';
+import { DesktopServers, PRODUCTION_URL, serverScope, webAppUrlFor } from './platform/servers';
 import { neutralinoKV } from './platform/storage';
 import { ServerPickerRow, ServerSettings } from './ui/ServerPicker';
 import { openExternalConfirmed } from './platform/links';
@@ -23,8 +23,10 @@ import { DesktopContext, type DesktopContextValue } from './ui/hooks';
 
 declare const __APP_VERSION__: string;
 
-/** Build-time default server; the user can switch (Settings → Server or the sign-in screen). */
+/** Build-time default server; the user can change it any time (Settings → Server connection or the sign-in screen). */
 const defaultServer = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+/** http://localhost servers are allowed by default only in development builds (or builds without a production server). */
+const localDevDefault = import.meta.env.DEV || !PRODUCTION_URL;
 
 NL.init();
 const nl = NL as unknown as NeutralinoLike;
@@ -115,36 +117,61 @@ const onSession = (s: VaultSession) => {
   controller.attachSession(s);
 };
 
-/** Owns the selected server; switching locks the current vault and remounts the app with a fresh session. */
-function Root({ initialServer }: { initialServer: string }) {
-  const [server, setServer] = useState(initialServer);
-  const platform = useMemo(() => makePlatform(server), [server]);
-  const switchServer = useCallback(async (url: string) => {
-    const origin = await saveSelectedServer(kv, url);
-    session?.lock(); // wipes keys, disconnects terminals, clears agent keys
-    session = null;
-    setServer(origin);
+/** Set by Root: shows the app for another server. */
+let showServer: (url: string) => void = () => undefined;
+
+/**
+ * A server change ends the current session for good — vault locked (terminals
+ * and agent keys cleared by the lock hooks), half-finished sign-in dropped,
+ * in-flight requests cancelled — then the app remounts with a fresh session
+ * bound to the new server's own storage.
+ */
+async function activateServer(url: string): Promise<void> {
+  session?.dispose();
+  session = null;
+  showServer(url);
+}
+
+/** Renders the app for the connected server; a server change remounts it with a fresh session. */
+function Root({ servers }: { servers: DesktopServers }) {
+  const [server, setServer] = useState(servers.activeUrl);
+  useEffect(() => {
+    showServer = setServer;
+    return () => {
+      showServer = () => undefined;
+    };
   }, []);
-  const picker = useMemo(() => ({ current: server, isUnlocked: () => !!session?.isUnlocked, onSwitch: switchServer }), [server, switchServer]);
+  const platform = useMemo(() => makePlatform(server), [server]);
   const extensions = useMemo(
     () => ({
       ...baseExtensions,
-      authFooter: () => <ServerPickerRow {...picker} />,
-      settingsSections: [...(baseExtensions.settingsSections ?? []), { id: 'server', label: 'Server', render: () => <ServerSettings {...picker} /> }],
+      authFooter: () => <ServerPickerRow servers={servers} />,
+      settingsSections: [...(baseExtensions.settingsSections ?? []), { id: 'server', label: 'Server connection', render: () => <ServerSettings servers={servers} /> }],
     }),
-    [picker],
+    [servers],
   );
   return <PassVaultApp key={server} platform={platform} platformName="desktop" extensions={extensions} onSession={onSession} />;
 }
 
 async function boot() {
-  const initialServer = await loadSelectedServer(kv, defaultServer);
+  const servers = await DesktopServers.load(
+    {
+      kv,
+      listKeys: () => nl.storage.getKeys(),
+      deleteToken: async (scope) => void (await helper.request('keychain.delete', { account: sessionTokenAccount(scope) })),
+      inspectTls: (url) => helper.request<{ ok: boolean; reason?: string; message: string }>('net.inspectTls', { url }),
+      appOrigin: window.location.origin,
+      activate: activateServer,
+    },
+    defaultServer,
+    localDevDefault,
+  );
   if (import.meta.env.MODE === 'development' && new URLSearchParams(window.location.search).has('preview')) {
     const { setupPreviewAccount } = await import('./dev-preview');
-    await setupPreviewAccount(makePlatform(initialServer));
-    (window as unknown as { __pvDev: unknown }).__pvDev = { controller, helper, getSession: () => session };
+    await setupPreviewAccount(makePlatform(servers.activeUrl));
+    (window as unknown as { __pvDev: unknown }).__pvDev = { controller, helper, getSession: () => session, servers };
   }
-  render(initialServer);
+  render(servers);
 }
 
 void connection.start();
@@ -152,11 +179,11 @@ void connection.start();
 // harness also runs the same bundle in Neutralino's window-less cloud mode).
 if (String(window.NL_MODE) === 'window') void shell.install();
 
-const render = (initialServer: string) =>
+const render = (servers: DesktopServers) =>
   createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <DesktopContext.Provider value={ctx}>
-      <Root initialServer={initialServer} />
+      <Root servers={servers} />
       <DesktopOverlays />
     </DesktopContext.Provider>
   </StrictMode>,

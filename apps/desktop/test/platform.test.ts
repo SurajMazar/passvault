@@ -23,6 +23,7 @@ function fakeNl(overrides: Partial<NeutralinoLike> = {}): NeutralinoLike {
       },
       setData: async (k, v) => void store.set(k, v ?? ''),
       removeData: async (k) => void store.delete(k),
+      getKeys: async () => [...store.keys()],
     },
     clipboard: { readText: async () => clip, writeText: async (t) => void (clip = t) },
     ...overrides,

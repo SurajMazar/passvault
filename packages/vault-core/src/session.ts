@@ -557,6 +557,19 @@ export class VaultSession {
     void this.toLocked();
   }
 
+  /**
+   * Ends this session for good (the client switched servers): locks the vault,
+   * drops a half-finished sign-in and cancels every in-flight request, so
+   * nothing started for this server completes afterwards. Not reusable.
+   */
+  dispose(): void {
+    this.lock();
+    this.clearPendingLogin();
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    this.syncTimer = null;
+    this.api.abortAll();
+  }
+
   private wipeUnlockedState() {
     if (this.lockTimer) clearTimeout(this.lockTimer);
     if (this.syncTimer) clearInterval(this.syncTimer);

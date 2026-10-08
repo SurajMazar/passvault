@@ -60,6 +60,11 @@ const schema = z
     PRELOGIN_SECRET: strongSecret('PRELOGIN_SECRET'),
     WEB_APP_URL: z.url({ protocol: /^https?$/ }).transform((u) => u.replace(/\/+$/, '')),
     MAIL_TRANSPORT: z.enum(['smtp', 'console', 'memory'], { error: 'MAIL_TRANSPORT must be smtp, console or memory' }),
+    /** "false" closes sign-up on this server (existing accounts are unaffected). */
+    REGISTRATION_OPEN: z
+      .enum(['true', 'false'], { error: 'REGISTRATION_OPEN must be true or false' })
+      .default('true')
+      .transform((v) => v === 'true'),
     MAIL_FROM: z.string().min(3).default('PassVault <no-reply@passvault.invalid>'),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: int(587, 1, 65535),

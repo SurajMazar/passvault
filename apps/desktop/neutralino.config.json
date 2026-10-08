@@ -38,6 +38,7 @@
     "storage.getData",
     "storage.setData",
     "storage.removeData",
+    "storage.getKeys",
     "clipboard.readText",
     "clipboard.writeText"
   ],

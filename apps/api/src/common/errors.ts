@@ -37,6 +37,7 @@ export const E = {
   alreadyExists: (message = 'Already exists') => new ApiException(409, 'already_exists', message),
   keyRotationRequired: () =>
     new ApiException(409, 'key_rotation_required', 'The vault key must be rotated before new members can be added'),
+  registrationClosed: () => new ApiException(403, 'registration_closed', 'This server does not accept new accounts'),
   gone: (message = 'This resource was permanently deleted', details?: unknown) => new ApiException(410, 'gone', message, details),
   rateLimited: (message = 'Too many requests, please try again later') => new ApiException(429, 'rate_limited', message),
 };

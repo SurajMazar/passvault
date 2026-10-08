@@ -1,5 +1,5 @@
 /**
- * Real-browser check of the extension's server switcher.
+ * Real-browser check of the extension's server connection (editable at any time).
  *
  * Loads the unpacked extension in Chromium, opens the REAL toolbar popup
  * (chrome.action.openPopup) and drives it over the DevTools protocol:
@@ -13,10 +13,14 @@
  *   3. a server Chrome has not granted host access to is not used while
  *      Chrome's permission prompt is unanswered (headless Chrome cannot
  *      answer it; the "denied" message path is covered by unit tests only);
- *   4. sign-in on server A, switch to server B → B starts signed out in its
- *      own storage namespace; switch back → A's locked account is back and
- *      unlocks with its master password;
- *   5. the master password never lands in chrome.storage.local.
+ *   4. an address that fails the compatibility check is not applied: the
+ *      current connection is kept and the error is shown;
+ *   5. sign-in on server A, change the address to server B → B starts signed
+ *      out in its own storage namespace; switch back from the saved servers →
+ *      A's locked account is back and unlocks with its master password;
+ *   6. Settings → Server connection while unlocked: the URL is prefilled,
+ *      Save changes asks to lock, and the vault is locked after switching;
+ *   7. the master password never lands in chrome.storage.local.
  *
  * Needs the local stack (podman compose up -d: API :3000, Mailpit :8025) and
  * an extension build WITHOUT a production URL; the script adds
@@ -161,6 +165,14 @@ async function fill(t: Target, elExpr: string, text: string) {
   await sleep(100);
 }
 
+/** PV_SHOTS=<dir>: save popup screenshots for review. */
+async function shot(t: Target, name: string) {
+  const dir = process.env.PV_SHOTS;
+  if (!dir) return;
+  const r = await t.send<{ data: string }>('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(join(dir, `${name}.png`), Buffer.from(r.data, 'base64'));
+}
+
 try {
   // Chromium's own component extensions also run service workers; pick ours by its manifest.
   let sw: Target | null = null;
@@ -174,7 +186,8 @@ try {
     if (!sw) await sleep(200);
   }
   if (!sw) throw new Error('PassVault service worker not found');
-  const storedServer = () => sw!.eval<string>(`chrome.storage.local.get('pv.server').then((r) => r['pv.server'])`);
+  // URL of the active saved server (pv.servers).
+  const storedServer = () => sw!.eval<string>(`chrome.storage.local.get('pv.servers').then((r) => { const s = r['pv.servers']; return s.profiles.find((p) => p.id === s.activeId).url; })`);
   async function closePopup(p: Target) {
     await p.eval(`window.close()`).catch(() => undefined);
     p.close();
@@ -199,21 +212,37 @@ try {
 
   let popup = await openPopup();
   await waitFor(popup, hasText('Sign in to PassVault'));
-  check('popup shows the current server', await popup.eval<boolean>(`${hasText('Server · Local development')} && ${hasText('localhost:3000')}`));
+  check('popup shows the current server', await popup.eval<boolean>(`${hasText('Server · Local development')} && ${hasText('http://localhost:3000')}`));
 
   await click(popup, byButton('Change'));
-  await fill(popup, byLabel('Server address'), 'http://vault.example.com');
-  await click(popup, byButton('Connect'));
-  check('plain http to a public host is refused', await waitFor(popup, hasText('plain http is only allowed for localhost'), 3000));
+  check('the address field is prefilled with the current URL', await popup.eval<boolean>(`${byLabel('Server URL')}.value === 'http://localhost:3000'`));
+  await fill(popup, byLabel('Server URL'), 'http://vault.example.com');
+  await click(popup, byButton('Save changes'));
+  check('plain http to a public host is refused', await waitFor(popup, hasText('plain http:// is only allowed for local development'), 3000));
 
   // A server without host access: Chrome shows its permission prompt, which a headless browser
   // leaves unanswered. Nothing may switch while it is pending; closing the popup abandons it.
-  await fill(popup, byLabel('Server address'), 'https://vault.example.com');
-  await click(popup, byButton('Connect'));
+  await fill(popup, byLabel('Server URL'), 'https://vault.example.com');
+  await click(popup, byButton('Save changes'));
   await sleep(2500);
   const stillLocal = await storedServer();
   const granted = await sw.eval<boolean>(`chrome.permissions.contains({ origins: ['https://vault.example.com/*'] })`);
   check('an ungranted server is not used while the permission prompt is unanswered', stillLocal === 'http://localhost:3000' && !granted, `selected=${stillLocal}, granted=${granted}`);
+  await closePopup(popup);
+  popup = await openPopup();
+  await waitFor(popup, hasText('Sign in to PassVault'));
+
+  // An address that is reachable but not a PassVault API (wrong path prefix): nothing changes.
+  await click(popup, byButton('Change'));
+  await fill(popup, byLabel('Server URL'), 'http://127.0.0.1:3000/not-passvault');
+  await click(popup, byButton('Save changes'));
+  const refused = await waitFor(popup, `${hasText('Not a PassVault server')} && ${hasText('still connected to localhost:3000')}`, 10_000);
+  await shot(popup, '1-signin-check-failed');
+  check('a failed compatibility check keeps the current connection', refused && (await storedServer()) === 'http://localhost:3000', `selected=${await storedServer()}`);
+  await click(popup, byButton('Test connection'));
+  await fill(popup, byLabel('Server URL'), 'http://127.0.0.1:3000');
+  await click(popup, byButton('Test connection'));
+  check('Test connection reports a compatible server without switching', (await waitFor(popup, hasText('Compatible PassVault server'), 10_000)) && (await storedServer()) === 'http://localhost:3000');
   await closePopup(popup);
   popup = await openPopup();
   await waitFor(popup, hasText('Sign in to PassVault'));
@@ -229,24 +258,38 @@ try {
   await click(popup, byButton('Lock'));
   await waitFor(popup, hasText('PassVault is locked'));
 
-  // Switch to server B.
+  // Change the address to server B (vault already locked: no confirmation needed).
   await click(popup, byButton('Change'));
-  await fill(popup, byLabel('Server address'), 'http://127.0.0.1:3000');
-  await click(popup, byButton('Connect'));
+  await fill(popup, byLabel('Server URL'), 'http://127.0.0.1:3000');
+  await click(popup, byButton('Save changes'));
   await waitFor(popup, `${hasText('127.0.0.1:3000')} && ${hasText('Sign in to PassVault')}`, 10_000);
   const sel = await storedServer();
   check('server B starts signed out in its own namespace', sel === 'http://127.0.0.1:3000' && (await popup.eval<boolean>(hasText('Sign in to PassVault'))), `selected=${sel}`);
 
-  // Reopen the popup (fresh page) and switch back with the shortcut.
+  // Reopen the popup (fresh page) and switch back from the saved servers.
   await closePopup(popup);
   popup = await openPopup();
   await click(popup, byButton('Change'));
-  await click(popup, `[...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Local development'))`);
-  await click(popup, byButton('Connect'));
+  check('the previous server is kept to switch back to', await waitFor(popup, `(document.querySelector('section[aria-label="Saved servers"]')?.textContent ?? '').includes('http://localhost:3000')`, 5000));
+  await click(popup, byButton('Switch'));
   check('switching back restores server A’s locked account', await waitFor(popup, `${hasText('PassVault is locked')} && ${hasText(EMAIL)}`, 10_000));
   await fill(popup, byLabel('Master password'), PASSWORD);
   await click(popup, byButton('Unlock'));
   check('server A unlocks with its master password after switching back', await waitFor(popup, byButton('Lock'), 15_000));
+
+  // Settings → Server connection while unlocked: changing the address asks to lock first.
+  await click(popup, `[...document.querySelectorAll('[role=tab]')].find((b) => b.textContent.trim() === 'Settings')`);
+  check('Settings shows the connected server', await waitFor(popup, `${hasText('Server connection')} && ${hasText('Connected to')} && ${byLabel('Server URL')}.value === 'http://localhost:3000' && ${hasText('Ready')}`, 5000));
+  await fill(popup, byLabel('Server URL'), 'http://127.0.0.1:3000');
+  await click(popup, byButton('Save changes'));
+  check('changing the server while unlocked asks to lock', await waitFor(popup, hasText('Your vault will be locked'), 10_000));
+  await shot(popup, '2-settings-confirm');
+  await click(popup, byButton('Lock and switch'));
+  check('after Lock and switch the new server starts signed out', await waitFor(popup, hasText('Sign in to PassVault'), 10_000) && (await storedServer()) === 'http://127.0.0.1:3000');
+  await click(popup, byButton('Change'));
+  await shot(popup, '3-saved-servers');
+  await click(popup, byButton('Switch'));
+  check('server A was locked by the switch', await waitFor(popup, `${hasText('PassVault is locked')} && ${hasText(EMAIL)}`, 10_000));
 
   const dump = await sw.eval<string>(`chrome.storage.local.get(null).then((r) => JSON.stringify(r))`);
   check('master password is not in chrome.storage.local', !dump.includes(PASSWORD));

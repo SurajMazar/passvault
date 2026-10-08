@@ -38,6 +38,7 @@ import { evaluateFill } from './autofill';
 import type { ChromeLike, SenderLike } from './chrome-api';
 import { itemDetail, summarize } from './detail';
 import { TOKEN_KEY } from './platform';
+import type { ServerCheck } from '@passvault/vault-core/servers';
 import type { ServerInfo } from '../shared/protocol';
 import { checkSender } from './sender';
 import type { SavePromptManager } from './save-prompt';
@@ -84,8 +85,19 @@ export interface ControllerDeps {
   log?: (event: string, detail?: string) => void;
   /** storage key of this server's session token (default: the legacy global key) */
   tokenKey?: string;
-  /** current server + switching (index.ts rebuilds the session for the new server) */
-  server?: ServerInfo & { switchTo(url: string, force: boolean): Promise<string> };
+  /** server connection (index.ts rebuilds the session when the server changes) */
+  server?: ServerControl;
+}
+
+/** What the controller may do with the server connection (implemented by ServerManager). */
+export interface ServerControl {
+  info(): ServerInfo;
+  check(url: string): Promise<ServerCheck>;
+  connect(url: string): Promise<string>;
+  switchTo(id: string): Promise<string>;
+  rename(id: string, name: string): Promise<void>;
+  remove(id: string): Promise<void>;
+  setLocalDev(on: boolean): Promise<boolean>;
 }
 
 const LOCKED_TYPES = new Set<Request['type']>([
@@ -206,6 +218,12 @@ export class BackgroundController {
     return () => this.stateListeners.delete(fn);
   }
 
+  /** Re-sends the popup state (e.g. the saved servers changed). */
+  pushState(): void {
+    this.lastStateJson = '';
+    this.onSnapshot(this.session.getSnapshot());
+  }
+
   private onSnapshot(s: SessionSnapshot) {
     if (s.items !== this.lastItemsRef) {
       this.lastItemsRef = s.items;
@@ -243,7 +261,7 @@ export class BackgroundController {
       clipboardClearSeconds: s.settings.clipboardClearSeconds,
       dataVersion: this.dataVersion,
       webUrl: this.deps.webUrl,
-      ...(this.deps.server ? { server: { url: this.deps.server.url, presets: this.deps.server.presets } } : {}),
+      ...(this.deps.server ? { server: this.deps.server.info() } : {}),
     };
   }
 
@@ -543,11 +561,26 @@ export class BackgroundController {
         return this.autosave().setEnabled(req.enabled);
       case 'autosave.clearNever':
         return this.autosave().clearNeverList();
-      case 'server.set': {
-        if (!this.deps.server) throw new ControllerError('bad_state', 'Switching servers is not available.');
-        return { url: await this.deps.server.switchTo(req.url, req.force ?? false) } satisfies ResponseMap['server.set'];
-      }
+      case 'server.check':
+        return (await this.servers().check(req.url)) satisfies ResponseMap['server.check'];
+      case 'server.set':
+        return { url: await this.servers().connect(req.url) } satisfies ResponseMap['server.set'];
+      case 'server.switch':
+        return { url: await this.servers().switchTo(req.id) } satisfies ResponseMap['server.switch'];
+      case 'server.rename':
+        await this.servers().rename(req.id, req.name);
+        return { ok: true } satisfies ResponseMap['server.rename'];
+      case 'server.remove':
+        await this.servers().remove(req.id);
+        return { ok: true } satisfies ResponseMap['server.remove'];
+      case 'server.localDev':
+        return { localDev: await this.servers().setLocalDev(req.on) } satisfies ResponseMap['server.localDev'];
     }
+  }
+
+  private servers(): ServerControl {
+    if (!this.deps.server) throw new ControllerError('bad_state', 'Changing servers is not available.');
+    return this.deps.server;
   }
 
   private autosave() {

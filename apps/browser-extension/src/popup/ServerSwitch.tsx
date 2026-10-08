@@ -1,144 +1,110 @@
-import { useState, type FormEvent } from 'react';
-import { Globe, Laptop, Server } from 'lucide-react';
-import { Banner, Button, Field, Input, cx } from '@passvault/ui';
-import { isLoopbackServer, normalizeServerUrl } from '@passvault/vault-core/servers';
-import type { ServerInfo } from '../shared/protocol';
-import { RpcError, call, errorText } from './rpc';
+import { useState } from 'react';
+import { Laptop, Server } from 'lucide-react';
+import { Button, ServerConnection, type ServerCheckView, type ServerConnectionProps } from '@passvault/ui';
+import { describeCheck, isLoopbackServer, normalizeServerUrl, serverOrigin } from '@passvault/vault-core/servers';
+import type { PopupState, ServerInfo } from '../shared/protocol';
+import { call } from './rpc';
 
-function describe(server: ServerInfo) {
-  const preset = server.presets.find((p) => p.url === server.url);
-  const kind = preset?.label ?? (isLoopbackServer(server.url) ? 'Local server' : 'Self-hosted server');
-  return { kind, host: new URL(server.url).host, Icon: isLoopbackServer(server.url) ? Laptop : preset ? Globe : Server };
+/** Chrome host access for a server; must start inside the click handler (user gesture). */
+const requestAccess = (base: string) => chrome.permissions.request({ origins: [`${serverOrigin(base)}/*`] });
+
+function connectionStatus(state: PopupState): ServerConnectionProps['status'] {
+  if (state.phase === 'signed_out') return { label: 'Signed out', tone: 'neutral' };
+  if (state.phase === 'locked') return { label: 'Locked', tone: 'neutral' };
+  if (state.phase !== 'unlocked') return { label: 'Signing in', tone: 'neutral' };
+  if (!state.online) return { label: 'Offline', tone: 'warn' };
+  if (state.sync.lastError) return { label: 'Connection error', tone: 'danger' };
+  if (state.sync.state === 'syncing') return { label: 'Syncing', tone: 'neutral' };
+  return { label: 'Ready', tone: 'ok' };
 }
 
-/**
- * "Server · host  Change" row for the sign-in and lock screens. The address is
- * editable; the built-in servers are one-click shortcuts. Host access for the
- * chosen server is requested from Chrome (it shows its own permission prompt).
- */
-export function ServerSwitch({ server }: { server: ServerInfo }) {
+/** Props for the shared Server connection panel, backed by the background's ServerManager (no React hooks). */
+function serverProps(server: ServerInfo, state: PopupState): ServerConnectionProps {
+  const normalize = (url: string) => normalizeServerUrl(url, { allowLocalHttp: server.localDev });
+  return {
+    profiles: server.profiles,
+    localDev: server.localDev,
+    unlocked: state.phase === 'unlocked',
+    status: connectionStatus(state),
+    normalize,
+    test: (url) => {
+      const base = normalize(url);
+      return requestAccess(base).then(async (granted): Promise<ServerCheckView> => {
+        if (!granted) return { ok: false, title: 'Permission needed', detail: `Chrome did not allow PassVault to connect to ${new URL(base).host}. Nothing was sent.` };
+        return describeCheck(await call({ type: 'server.check', url: base }));
+      });
+    },
+    save: async (url) => {
+      await call({ type: 'server.set', url: normalize(url) });
+    },
+    switchTo: (id) => {
+      const p = server.profiles.find((x) => x.id === id);
+      const access = p ? requestAccess(p.url) : Promise.resolve(false);
+      return access.then(async (granted) => {
+        if (!granted) throw new Error('Chrome did not allow PassVault to connect to that server.');
+        await call({ type: 'server.switch', id });
+      });
+    },
+    rename: async (id, name) => {
+      await call({ type: 'server.rename', id, name });
+    },
+    remove: async (id) => {
+      await call({ type: 'server.remove', id });
+    },
+    setLocalDev: async (on) => {
+      await call({ type: 'server.localDev', on });
+    },
+    compact: true,
+  };
+}
+
+/** Settings → Server connection. */
+export function ServerSettings({ state }: { state: PopupState }) {
+  if (!state.server) return null;
+  return (
+    <section className="flex flex-col gap-3 px-4 py-4" aria-labelledby="server-connection-h">
+      <div>
+        <h2 id="server-connection-h" className="text-sm font-semibold">
+          Server connection
+        </h2>
+        <p className="mt-0.5 text-xs text-fg-muted">Each server keeps its own sign-in and encrypted data in this browser. Changing the server locks the vault.</p>
+      </div>
+      <ServerConnection key={state.server.url} {...serverProps(state.server, state)} />
+    </section>
+  );
+}
+
+/** "Server · host  Change" row for the sign-in and lock screens; expands into the same panel. */
+export function ServerSwitch({ state }: { state: PopupState }) {
   const [open, setOpen] = useState(false);
-  const [url, setUrl] = useState(server.url);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [unreachable, setUnreachable] = useState(false);
-  const d = describe(server);
-
-  const connect = (force: boolean) => {
-    setError(null);
-    setUnreachable(false);
-    let origin: string;
-    try {
-      origin = normalizeServerUrl(url);
-    } catch (e) {
-      setError(errorText(e));
-      return;
-    }
-    if (origin === server.url) {
-      setOpen(false);
-      return;
-    }
-    setBusy(true);
-    // Must run directly in the click handler: Chrome only shows permission prompts for a user gesture.
-    void chrome.permissions
-      .request({ origins: [`${origin}/*`] })
-      .then(async (granted) => {
-        if (!granted) throw new Error(`PassVault needs permission to connect to ${new URL(origin).host}.`);
-        await call({ type: 'server.set', url: origin, force });
-        setOpen(false);
-      })
-      .catch((e) => {
-        setError(errorText(e));
-        setUnreachable(e instanceof RpcError && e.code === 'network');
-      })
-      .finally(() => setBusy(false));
-  };
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    connect(false);
-  };
-
-  if (!open) {
+  const server = state.server!;
+  const props = serverProps(server, state);
+  const current = server.profiles.find((p) => p.active);
+  const Icon = isLoopbackServer(server.url) ? Laptop : Server;
+  if (open) {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs">
-        <d.Icon className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-        <span className="min-w-0 flex-1">
-          <span className="block text-fg-subtle">Server · {d.kind}</span>
-          <span className="block truncate font-medium text-fg" title={server.url}>
-            {d.host}
-          </span>
-        </span>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            setUrl(server.url);
-            setOpen(true);
-          }}
-        >
-          Change
-        </Button>
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3">
+        <ServerConnection {...props} />
+        <div className="flex justify-end">
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            Close
+          </Button>
+        </div>
       </div>
     );
   }
-
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2.5 rounded-lg border border-border bg-surface p-3" aria-label="Choose a server">
-      <Field label="Server address" hint="https://, or http://localhost for local development">
-        {(id, describedBy) => (
-          <Input
-            id={id}
-            aria-describedby={describedBy}
-            value={url}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              setError(null);
-              setUnreachable(false);
-            }}
-            inputMode="url"
-            autoComplete="url"
-            spellCheck={false}
-            placeholder="https://vault.example.com"
-            autoFocus
-          />
-        )}
-      </Field>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Built-in servers">
-        {server.presets.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => {
-              setUrl(p.url);
-              setError(null);
-              setUnreachable(false);
-            }}
-            className={cx(
-              'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
-              url.trim() === p.url ? 'border-accent bg-accent-soft text-fg' : 'border-border text-fg-muted hover:bg-surface-2',
-            )}
-          >
-            {p.label} · {new URL(p.url).host}
-          </button>
-        ))}
-      </div>
-      {error && <Banner tone={unreachable ? 'warn' : 'danger'}>{error}</Banner>}
-      <p className="text-[11px] text-fg-subtle">Each server keeps its own sign-in and encrypted data in this browser. Switching locks the vault.</p>
-      <div className="flex justify-end gap-2">
-        <Button size="sm" type="button" onClick={() => setOpen(false)} disabled={busy}>
-          Cancel
-        </Button>
-        {unreachable ? (
-          <Button size="sm" type="button" variant="primary" loading={busy} onClick={() => connect(true)}>
-            Switch anyway
-          </Button>
-        ) : (
-          <Button size="sm" type="submit" variant="primary" loading={busy} disabled={!url.trim()}>
-            Connect
-          </Button>
-        )}
-      </div>
-    </form>
+    <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs">
+      <Icon className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block text-fg-subtle">Server · {current?.name ?? 'PassVault'}</span>
+        <span className="block truncate font-medium text-fg" title={server.url}>
+          {server.url}
+        </span>
+      </span>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        Change
+      </Button>
+    </div>
   );
 }

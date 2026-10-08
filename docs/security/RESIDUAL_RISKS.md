@@ -30,6 +30,7 @@ PassVault is "fully secure".
 | Existing SSH sessions | Locking the vault closes app-managed sessions and stops agent signing, but sessions opened in Terminal.app/iTerm continue. | Separate processes |
 | Audit privacy | PV-SEC-006: owners see members' IP prefixes/device ids for vault events. | Needs a product decision |
 | Dev-only tooling | `tests/e2e-video` (video generation) depends on `kokoro-js` → `sharp`/libvips with known advisories. Never part of a shipped artifact; runs only on maintainers' machines. | Upgrade when kokoro-js/transformers allow sharp ≥ 0.35.5 |
+| Desktop CSP `connect-src https:` | Users choose their own PassVault server (Settings → Server connection), so the desktop webview may connect to any https:// origin (plain http only on loopback). A script injected into the webview could send data to an attacker's https server — but such a script could already read the decrypted vault, and the CSP still forbids inline/remote scripts. | Inherent to user-chosen servers; script-src stays `'self'` |
 | Container base images | `node:24-alpine` / `postgres:16-alpine` are pinned by tag, not digest. | Pin digests in the deployment repo if reproducible builds are required |
 | Interrupted writes | Not fault-injected (`sync.interrupted-writes` unverified); multi-row operations are shown to be atomic (`sync.atomic-rotation`), single-row writes rely on PostgreSQL transactions. | Needs database fault injection |
 
