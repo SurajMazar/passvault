@@ -1,4 +1,4 @@
-# pv-helper build. Requires Go 1.25 and Xcode command line tools (clang, lipo).
+# pv-helper build. Requires Go 1.27 (a supported release; see go.mod) and Xcode command line tools (clang, lipo).
 #
 #   make build       host-arch binary          -> bin/pv-helper
 #   make universal   arm64 + amd64, lipo'd     -> bin/pv-helper-universal
@@ -8,7 +8,7 @@
 
 GO        ?= go
 VERSION   ?= 0.1.0-dev
-MIN_MACOS ?= 12.0
+MIN_MACOS ?= 14.0
 BIN       := bin
 PKG       := ./cmd/pv-helper
 

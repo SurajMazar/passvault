@@ -28,12 +28,12 @@ Changes to that contract are listed under [Contract deviations](#contract-deviat
 
 | Module | Version | License | Use |
 |---|---|---|---|
-| `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | `ssh`, `ssh/agent` |
-| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | `LOCAL_PEERPID` getsockopt, `kern.proc` sysctl |
-| `github.com/coder/websocket` | v1.8.14 | ISC | Neutralino WebSocket connection |
+| `golang.org/x/crypto` | v0.57.0 | BSD-3-Clause | `ssh`, `ssh/agent` |
+| `golang.org/x/sys` | v0.48.0 | BSD-3-Clause | `LOCAL_PEERPID` getsockopt, `kern.proc` sysctl |
+| `github.com/coder/websocket` | v1.8.15 | ISC | Neutralino WebSocket connection |
 
-The Go toolchain is 1.25 (`GOTOOLCHAIN=local`). x/crypto v0.55.0 is the newest
-release that supports Go 1.25; v0.56 and later require Go 1.26. Everything else
+The Go toolchain is 1.27 (`GOTOOLCHAIN=local`; Go supports only the two newest
+releases, so move with them). Everything else
 comes from the standard library and Apple system frameworks.
 
 ## Neutralino extension protocol (verified)
@@ -405,8 +405,8 @@ make sign IDENTITY="Developer ID Application: … (TEAMID)" TEAM_ID=TEAMID
 
 - Build flags: `-trimpath -ldflags "-s -w -X main.version=$(VERSION)"`,
   `CGO_ENABLED=1`, `CC="clang -arch …"` per architecture.
-- Minimum macOS: `CGO_CFLAGS/LDFLAGS=-mmacosx-version-min=12.0` and
-  `MACOSX_DEPLOYMENT_TARGET=12.0`.
+- Minimum macOS: `CGO_CFLAGS/LDFLAGS=-mmacosx-version-min=14.0` and
+  `MACOSX_DEPLOYMENT_TARGET=14.0` (Go 1.27 needs macOS 13+; the app bundle requires 14.0).
 - `PV_SKIP_KEYCHAIN_TESTS=1` skips the tests that write to the real login
   keychain (`pv.test.helper-selftest`, which they delete afterwards).
 
@@ -502,8 +502,8 @@ $ file bin/pv-helper-universal
 bin/pv-helper-universal: Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit executable x86_64] [arm64]
 bin/pv-helper-universal (for architecture x86_64):	Mach-O 64-bit executable x86_64
 bin/pv-helper-universal (for architecture arm64):	Mach-O 64-bit executable arm64
-arm64 minos: 12.0
-x86_64 minos: 12.0
+arm64 minos: 14.0
+x86_64 minos: 14.0
 ```
 
 Both architecture slices run `--version` (x86_64 under Rosetta). With Xcode 26,

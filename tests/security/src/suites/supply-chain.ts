@@ -147,8 +147,9 @@ const suite: Suite = {
     }, { severity: 'high' });
 
     await t.check('sc.ci.actions-pinned', 'Third-party GitHub Actions are pinned to full commit SHAs', () => {
-      const uses = workflows.flatMap((f) => [...wf(f).matchAll(/uses:\s*([^\s#]+)/g)].map((m) => `${f}: ${m[1]}`));
-      const unpinned = uses.filter((u) => !/@[0-9a-f]{40}$/.test(u) && !/uses:\s*\.\//.test(u));
+      // Local reusable workflows (./.github/workflows/…) are versioned by the commit itself.
+      const uses = workflows.flatMap((f) => [...wf(f).matchAll(/uses:\s*([^\s#]+)/g)].filter((m) => !m[1]!.startsWith('./')).map((m) => `${f}: ${m[1]}`));
+      const unpinned = uses.filter((u) => !/@[0-9a-f]{40}$/.test(u));
       return { ok: unpinned.length === 0, evidence: `${uses.length} action references; not SHA-pinned: ${unpinned.length}${unpinned.length ? `\n${[...new Set(unpinned)].join('\n')}` : ''}` };
     }, { severity: 'medium', finding: 'PV-SEC-003' });
 

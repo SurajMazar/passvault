@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
-          go-version-input: '1.25'
+          go-version-input: '1.27' # keep in step with native/desktop-helper/go.mod
           work-dir: native/desktop-helper
           go-package: ./...
 
@@ -83,7 +83,7 @@ jobs:
           cache: pnpm
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25'
+          go-version-file: native/desktop-helper/go.mod
           cache-dependency-path: native/desktop-helper/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build
@@ -115,6 +115,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @passvault/types build && pnpm --filter @passvault/validation build
       - run: pnpm --filter @passvault/security-harness exec playwright install --with-deps chromium
+      - name: Prisma client (the in-process API checks import it)
+        run: pnpm --filter @passvault/api prisma:generate
       - name: Local PostgreSQL for the in-process API checks
         run: |
           sudo systemctl start postgresql.service

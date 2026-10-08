@@ -53,10 +53,14 @@ const suite: Suite = {
       }, { severity: 'medium' });
     }
 
-    await t.check('native.no-shell', 'The helper starts no shell and runs exactly one external program (/usr/bin/open) with an argv list', () => {
-      const exec = gitGrep('exec\\.Command|syscall\\.Exec|os\\.StartProcess', ['native/desktop-helper/internal', 'native/desktop-helper/cmd'], { extended: true }).filter((l) => !l.includes('_test.go'));
-      const shells = gitGrep('"(/bin/)?(ba|z)?sh"|"-c"', ['native/desktop-helper/internal', 'native/desktop-helper/cmd'], { extended: true }).filter((l) => !l.includes('_test.go'));
-      return { ok: exec.length === 1 && exec[0]!.includes('internal/term/term.go') && shells.length === 0, evidence: `process launches:\n${exec.join('\n')}\nshell invocations: ${shells.length}` };
+    await t.check('native.no-shell', 'The helper starts no shell; its only process launches are the two /usr/bin/open launchers (links, external terminal), each with an argv list', () => {
+      const dirs = ['native/desktop-helper/internal', 'native/desktop-helper/cmd'];
+      const exec = gitGrep('exec\\.Command|syscall\\.Exec|os\\.StartProcess', dirs, { extended: true }).filter((l) => !l.includes('_test.go'));
+      const shells = gitGrep('"(/bin/)?(ba|z)?sh"|"-c"', dirs, { extended: true }).filter((l) => !l.includes('_test.go'));
+      const allowed = ['internal/links/links.go', 'internal/term/term.go'];
+      const sitesOk = exec.length === allowed.length && allowed.every((f) => exec.some((l) => l.includes(f) && l.includes('exec.Command(argv[0], argv[1:]...)')));
+      const openOnly = allowed.every((f) => readFileSync(join(HELPER_DIR, f), 'utf8').includes('"/usr/bin/open"'));
+      return { ok: sitesOk && openOnly && shells.length === 0, evidence: `process launches:\n${exec.join('\n')}\nlaunchers run /usr/bin/open: ${openOnly}\nshell invocations: ${shells.length}` };
     }, { severity: 'critical' });
 
     await t.check('native.keychain.biometric-acl', 'Biometric unlock material is protected by the Keychain access control (Touch ID enforced by the OS, not by a UI prompt)', () => {
