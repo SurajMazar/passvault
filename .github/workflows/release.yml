@@ -212,6 +212,8 @@ jobs:
           VITE_API_URL: ${{ vars.PV_PRODUCTION_URL }}
           VITE_WEB_URL: ${{ vars.PV_WEB_URL || vars.PV_PRODUCTION_URL }}
           VITE_PRODUCTION_URL: ${{ vars.PV_PRODUCTION_URL }}
+          # Chrome Web Store extension ID(s) allowed to use Touch ID (the release zip's ID is built in)
+          VITE_PV_EXTENSION_IDS: ${{ vars.PV_EXTENSION_IDS }}
           ARCHS: universal
           HELPER_LAYOUT: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 != '' && 'bundle' || 'flat' }}
         run: |
