@@ -7,7 +7,12 @@ import tailwindcss from '@tailwindcss/vite';
 const root = import.meta.dirname;
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string; description: string };
 
-/** Build manifest.json with the minimal permissions and the configured API host only. */
+/**
+ * Build manifest.json with minimal permissions. The only host granted at install
+ * is the default server (the built-in production server, else local development);
+ * other servers the user enters in the popup are granted through Chrome's
+ * permission prompt (optional_host_permissions).
+ */
 export function buildManifest(apiUrl: string) {
   const api = new URL(apiUrl);
   if (api.protocol !== 'https:' && api.protocol !== 'http:') throw new Error('VITE_API_URL must be an http(s) URL');
@@ -27,11 +32,24 @@ export function buildManifest(apiUrl: string) {
     background: { service_worker: 'background.js', type: 'module' },
     permissions: ['storage', 'alarms', 'activeTab', 'scripting', 'offscreen', 'clipboardWrite'],
     host_permissions: [`${api.origin}/*`],
-    // Requested at runtime only when the user enables "Offer to save passwords".
+    // Requested at runtime only: all sites when the user enables "Offer to save passwords",
+    // or one origin when the user switches to another server.
     optional_host_permissions: ['https://*/*', 'http://*/*'],
     content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
     commands: { _execute_action: { suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' } } },
   };
+}
+
+/** Same rule as src/background/servers.ts productionUrlFrom (config files cannot import workspace TS). */
+function productionOrigin(raw: string | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)) return null;
+    return u.protocol === 'https:' ? u.origin : null;
+  } catch {
+    return null;
+  }
 }
 
 function manifestPlugin(apiUrl: string): Plugin {
@@ -45,7 +63,7 @@ function manifestPlugin(apiUrl: string): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, root, 'VITE_');
-  const apiUrl = env.VITE_API_URL || 'http://localhost:3000';
+  const apiUrl = productionOrigin(env.VITE_PRODUCTION_URL || env.VITE_API_URL) ?? 'http://localhost:3000';
   return {
     root,
     base: '/',

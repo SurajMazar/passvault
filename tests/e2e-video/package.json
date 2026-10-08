@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:save-prompt": "tsx src/save-prompt-check.ts",
     "tour:tts": "tsx src/tour/tts.ts",
-    "tour:record": "tsx src/tour/record.ts"
+    "tour:record": "tsx src/tour/record.ts",
+    "check:server-switch": "tsx src/server-switch-check.ts"
   },
   "dependencies": {
     "@passvault/sync": "workspace:*",

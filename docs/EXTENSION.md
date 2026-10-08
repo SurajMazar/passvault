@@ -34,10 +34,41 @@ set them in the shell or in `apps/browser-extension/.env.production` or
 
 | Variable       | Default                 | Effect |
 | -------------- | ----------------------- | ------ |
-| `VITE_API_URL` | `http://localhost:3000` | API base URL used by the service worker. Its origin becomes the **only** entry in `host_permissions` (`<origin>/*`). |
-| `VITE_WEB_URL` | `http://localhost:5173` | Dashboard URL opened by "Open dashboard", "Create an account" and "Finish in the dashboard". |
+| `VITE_API_URL` (or `VITE_PRODUCTION_URL`) | unset | The built-in **production server** (an `https://` origin; loopback values are ignored). It is the first server on a fresh install, a one-click shortcut in the server picker, and the **only** entry in `host_permissions` (`<origin>/*`). Without it the extension starts on local development and `host_permissions` is `http://localhost:3000/*`. |
+| `VITE_WEB_URL` | the production server | Dashboard URL for the production server ("Open dashboard", "Create an account", "Finish in the dashboard"). Local development uses `http://localhost:5173`; any other server uses its own origin. |
 
-Example: `VITE_API_URL=https://api.passvault.example VITE_WEB_URL=https://app.passvault.example pnpm --filter @passvault/browser-extension build`.
+Example: `VITE_API_URL=https://vault.example.com pnpm --filter @passvault/browser-extension build`.
+
+### Servers (local, production, or any address)
+
+The server is chosen in the popup, on the sign-in and lock screens:
+**Server · <host> → Change**. The address field is editable; **Production**
+and **Local development** are one-click shortcuts that fill it.
+
+- Accepted: `https://host[:port]`, or `http://` for `localhost`, `127.0.0.1`
+  and `[::1]` only. Paths, queries, credentials and other schemes are refused
+  (shared `normalizeServerUrl` in `@passvault/vault-core/servers`, also used by
+  the desktop app).
+- **Host access is granted per server by Chrome.** On **Connect** the popup
+  calls `chrome.permissions.request({ origins: ['<server>/*'] })` from the
+  click (an `optional_host_permissions` entry), so Chrome shows its own
+  prompt for any server that is not the built-in one. The background refuses
+  to switch unless `chrome.permissions.contains` confirms access.
+- The background probes `GET /api/v1/health` before switching; if the server
+  is unreachable the popup offers **Switch anyway** (useful for unlocking the
+  offline copy of a server that is down).
+- **Switching locks the vault** (resume key removed, pending captured
+  passwords dropped) and rebuilds the session for the new server. The
+  selection is stored in `chrome.storage.local` `pv.server`.
+- **Each server has its own namespace**: session token, device id, last
+  email and trusted-device tokens under `pv.<scope>.*`, and the encrypted
+  cache in IndexedDB `passvault-ext-<scope>-<account>`, where `<scope>` is
+  derived from the origin (e.g. `https_vault_example_com_443`,
+  `http_localhost_3000`). Switching back finds the previous account locked
+  and unlocks with its master password. Data from installs made before this
+  feature is moved under the build-time server once.
+- Only the popup can switch servers (`server.set` is a privileged message;
+  content scripts and other extensions are refused).
 
 The service worker sends API requests with the host permission, so the API
 does not need a CORS entry for the extension. If the API ever enforces an
@@ -78,8 +109,8 @@ to `chrome.scripting.executeScript({ func, args })`.
 | `scripting` | One-shot `executeScript` into the active tab's top frame to fill or read a login form. | none (scoped by `activeTab`) |
 | `offscreen` | An offscreen document (reason `CLIPBOARD`) clears the clipboard after the configured timeout. The service worker has no clipboard access, and the popup is usually closed by then. | none |
 | `clipboardWrite` | Lets the offscreen document write an empty string to the clipboard without a user gesture. | may show "Modify data you copy and paste" |
-| `host_permissions: [<API origin>/*]` | API calls from the service worker. | "Read and change your data on <api host>" |
-| `optional_host_permissions: [https://*/*, http://*/*]` | **Only if the user enables "Offer to save passwords"**: lets the opt-in content script notice login form submissions. Requested at runtime, removable at any time. | "Read and change all your data on all websites" (shown when enabling) |
+| `host_permissions: [<default server origin>/*]` | API calls from the service worker to the built-in server (production, else `http://localhost:3000`). | "Read and change your data on <api host>" |
+| `optional_host_permissions: [https://*/*, http://*/*]` | Requested at runtime only: **all sites** if the user enables "Offer to save passwords" (lets the opt-in content script notice login form submissions), or **one origin** when the user switches to another server. Removable at any time. | "Read and change all your data on all websites" (when enabling the save prompt) or "… on <server host>" (when switching server) |
 
 Deliberately **not** requested: `<all_urls>` or any other website host
 permission, `tabs`, `webRequest`, `cookies`, `nativeMessaging`, content
@@ -235,14 +266,21 @@ permission back; revoking the permission in `chrome://extensions` also stops it.
    as `github.io`), never on another site.
 6. **Save** creates a login titled with the host, with the origin as its URL
    and `host` matching; **Update** changes the password (old one stays in
-   history); **Never for this site** adds the site to a local list (Settings
+   history). **Add note** opens an optional note field (up to 2,000
+   characters): it becomes the new login's notes, or is appended to the
+   existing notes on update. The note is typed into the page, so the page can
+   observe the keystrokes (capture-phase listeners) like anything else typed
+   there; for sensitive notes, use the popup's "Save login from this page".
+   **Never for this site** adds the site to a local list (Settings
    shows a count and a Reset button). If the vault is locked, Save asks the
    user to unlock from the toolbar icon and press Save again.
 
 Verified with unit tests (sender/origin validation, locked flow, update vs.
-save, redirect handling, never list, TTL and wipe-on-lock, no secrets in
-replies), jsdom tests (untrusted events ignored, closed shadow root, no HTML
-injection), and a real-Chromium check with trusted input
+save, notes saved and appended, oversized/malformed notes rejected, redirect
+handling, never list, TTL and wipe-on-lock, no secrets in replies), jsdom
+tests (untrusted events ignored, closed shadow root, no HTML injection, note
+field closed for scripted clicks), and a real-Chromium check with trusted
+input that saves a login and a login with a typed note
 (`pnpm --filter @passvault/e2e-video check:save-prompt`).
 
 ## Service-worker suspension and locking
@@ -257,9 +295,10 @@ injection), and a real-Chromium check with trusted input
 
 | Data | Where | Protection |
 | ---- | ----- | ---------- |
-| Vault records, vault memberships, outbox, wrapped account keys | IndexedDB `passvault-ext-<email>` (one DB per account, `IndexedDbStore`) | ciphertext only |
-| Session token (bearer) | `chrome.storage.local` `pv.sessionToken` | plaintext; revocable; cannot decrypt anything |
-| Device id, last email, trusted-device token | `chrome.storage.local` `pv.pref.*` | plaintext, non-secret or revocable |
+| Vault records, vault memberships, outbox, wrapped account keys | IndexedDB `passvault-ext-<server scope>-<email>` (one DB per server and account, `IndexedDbStore`) | ciphertext only |
+| Session token (bearer) | `chrome.storage.local` `pv.<server scope>.sessionToken` | plaintext; revocable; cannot decrypt anything |
+| Device id, last email, trusted-device token | `chrome.storage.local` `pv.<server scope>.pref.*` | plaintext, non-secret or revocable |
+| Selected server | `chrome.storage.local` `pv.server` | origin only |
 | **User Key copy (resume key)** | `chrome.storage.session` `pv.resumeUserKey` | **plaintext key, in memory only, trusted contexts only, present only while unlocked, deleted on lock** |
 | Clipboard-clear pending flag | `chrome.storage.session` | no secret |
 | Decrypted items and keys | background worker memory | wiped on lock (best effort, see `docs/CRYPTO.md`) |
@@ -332,6 +371,17 @@ needed.
 | `test/lock.test.ts` (10) | resume key in storage.session (TRUSTED_CONTEXTS) and alarm armed on unlock; lock clears the key, calls `session.lock`, and later privileged requests return `locked`; alarm-triggered lock; resume after simulated worker restart with the key, none without it, invalid key discarded; alarm delivered to a restarted worker locks; clipboard clear scheduled (≥30 s) and run on lock or alarm through the offscreen document; logout |
 | `test/logs.test.ts` (1) | exercises handlers with dummy secrets while spying on every `console` method, and asserts no secret appears |
 | `test/manifest.test.ts` (2) | generated manifest is MV3 with the exact minimal permissions, the API host only, the CSP, and no broad or forbidden entries |
+| `test/servers.test.ts` (8) | production URL taken from the build (never loopback or plain http); presets; dashboard URL per server; per-server storage scopes; stored selection kept, corrupt one ignored; one-time migration of pre-existing global keys; token/prefs isolated per server; `server.set` popup-only, size-limited, invalid addresses → `invalid_message` |
+| `test/save-prompt.test.ts` (12) and `test/save-prompt-content.test.ts` (5, jsdom) | opt-in save prompt (see that section), including notes |
+
+Real-browser checks (Chromium, trusted input; need the local stack):
+`check:save-prompt` (save + save with a typed note) and `check:server-switch`
+(real toolbar popup driven over the DevTools protocol: current server shown,
+plain-http public host refused, ungranted server not used while Chrome's
+prompt is unanswered, sign in on server A → switch to B (signed out, own
+namespace) → back to A (locked account restored, unlocks), master password
+absent from `chrome.storage.local`). The prompt's "denied" path cannot be
+answered by headless Chrome and is covered by unit tests only.
 
 Latest result: **6 files, 36 tests passed**. Typecheck and build both pass.
 

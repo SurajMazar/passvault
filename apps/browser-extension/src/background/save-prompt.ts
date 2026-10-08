@@ -20,6 +20,7 @@ import type { ChromeLike, SenderLike } from './chrome-api';
 export const AUTOSAVE_ENABLED_KEY = 'pv.autoSave.enabled';
 export const NEVER_SAVE_KEY = 'pv.autoSave.never';
 export const PENDING_KEY = 'pv.autoSave.pending';
+export const NOTE_MAX = 2000;
 export const CONTENT_SCRIPT_ID = 'pv-save-prompt';
 export const AUTOSAVE_ORIGINS = ['https://*/*', 'http://*/*'];
 export const PENDING_TTL_MS = 3 * 60_000;
@@ -27,7 +28,14 @@ export const PENDING_TTL_MS = 3 * 60_000;
 export const contentMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('savePrompt.submitted'), username: z.string().max(500), password: z.string().min(1).max(4096) }).strict(),
   z.object({ type: z.literal('savePrompt.pending') }).strict(),
-  z.object({ type: z.literal('savePrompt.decide'), decision: z.enum(['save', 'update', 'dismiss', 'never']) }).strict(),
+  z
+    .object({
+      type: z.literal('savePrompt.decide'),
+      decision: z.enum(['save', 'update', 'dismiss', 'never']),
+      /** optional note typed into the prompt; stored in the item's notes */
+      note: z.string().max(NOTE_MAX).optional(),
+    })
+    .strict(),
 ]);
 export type ContentMessage = z.infer<typeof contentMessageSchema>;
 
@@ -123,7 +131,7 @@ export class SavePromptManager {
       case 'savePrompt.pending':
         return this.promptFor(tabId, url);
       case 'savePrompt.decide':
-        return this.decide(tabId, url, parsed.data.decision);
+        return this.decide(tabId, url, parsed.data.decision, parsed.data.note);
     }
   }
 
@@ -165,7 +173,10 @@ export class SavePromptManager {
     return { show: true, action: p.action, host: p.host, itemTitle: p.itemTitle, locked: !this.session.isUnlocked };
   }
 
-  private async decide(tabId: number, url: string, decision: 'save' | 'update' | 'dismiss' | 'never'): Promise<DecideResult> {
+  private async decide(tabId: number, url: string, decision: 'save' | 'update' | 'dismiss' | 'never', rawNote?: string): Promise<DecideResult> {
+    const note = (rawNote ?? '').trim();
+    /** Updates keep the existing notes and append the new one. */
+    const appendNote = (notes: string) => (!note ? notes : notes.trim() ? `${notes.trimEnd()}\n\n${note}` : note);
     const p = this.pending.get(tabId);
     if (!p || siteKey(url) !== p.site) return { ok: false, code: 'expired', message: 'This prompt expired. Use “Save login from this page” in PassVault.' };
     if (decision === 'dismiss') {
@@ -187,6 +198,7 @@ export class SavePromptManager {
           if (pl.type === 'login') {
             pl.fields.password = p.password;
             pl.fields.passwordUpdatedAt = new Date().toISOString();
+            pl.notes = appendNote(pl.notes);
           }
         });
         await this.drop(tabId);
@@ -195,11 +207,15 @@ export class SavePromptManager {
       // Re-check for an existing login now that the vault may have been unlocked after the capture.
       const existing = this.findExisting(this.session.getSnapshot(), url, p.username);
       if (existing && existing.payload.type === 'login') {
-        if (existing.payload.fields.password !== p.password && existing.role !== 'viewer') {
+        const changed = existing.payload.fields.password !== p.password || !!note;
+        if (changed && existing.role !== 'viewer') {
           await this.session.updateItem(existing.id, (pl) => {
             if (pl.type === 'login') {
-              pl.fields.password = p.password;
-              pl.fields.passwordUpdatedAt = new Date().toISOString();
+              if (pl.fields.password !== p.password) {
+                pl.fields.password = p.password;
+                pl.fields.passwordUpdatedAt = new Date().toISOString();
+              }
+              pl.notes = appendNote(pl.notes);
             }
           });
         }
@@ -209,6 +225,7 @@ export class SavePromptManager {
       await this.session.saveItem(
         newItem('login', {
           title: p.host.replace(/^www\./, ''),
+          notes: note,
           fields: { username: p.username, password: p.password, urls: [{ url: p.origin, match: 'host' }], passwordUpdatedAt: new Date().toISOString() },
         }),
       );

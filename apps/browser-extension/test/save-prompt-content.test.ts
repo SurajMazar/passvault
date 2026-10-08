@@ -56,6 +56,16 @@ describe('save-prompt content script', () => {
     expect(sent.filter((m) => m.type === 'savePrompt.decide')).toHaveLength(0);
   });
 
+  it('has a length-limited note field that stays closed for scripted clicks', () => {
+    const note = shadowRoot!.querySelector('textarea') as HTMLTextAreaElement;
+    expect(note.maxLength).toBe(2000);
+    expect(note.getAttribute('aria-label')).toBe('Note (optional)');
+    const box = shadowRoot!.querySelector('.note') as HTMLElement;
+    (shadowRoot!.querySelector('button[data-a="note"]') as HTMLButtonElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(box.classList.contains('open')).toBe(false);
+    expect(sent.filter((m) => m.type === 'savePrompt.decide')).toHaveLength(0);
+  });
+
   it('never runs twice in the same page', async () => {
     const before = document.querySelectorAll('passvault-save-prompt').length;
     vi.resetModules();

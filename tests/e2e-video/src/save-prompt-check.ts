@@ -92,10 +92,31 @@ await page.screenshot({ path: shot });
 // The prompt focuses its primary button; Enter produces a trusted click inside the closed shadow root.
 await page.keyboard.press('Enter');
 await page.waitForTimeout(500);
+
+// Second sign-in: add a note with real keyboard input. Focus order inside the prompt:
+// Save (focused) → Add note; opening the note focuses it, Tab returns to Save.
+await page.goto('https://shop.example.com/login');
+await page.addScriptTag({ path: SCRIPT });
+await page.fill('input[name=email]', 'bob@example.com');
+await page.fill('input[name=password]', 'Second-secret-42');
+await page.click('button[type=submit]');
+await page.waitForSelector('passvault-save-prompt', { state: 'attached', timeout: 5000 });
+await page.waitForTimeout(400);
+await page.keyboard.press('Tab');
+await page.keyboard.press('Enter'); // "Add note"
+await page.keyboard.type('Team account — ask Ann before rotating', { delay: 10 });
+const noteShot = join(OUT, 'save-prompt-note.png');
+await page.screenshot({ path: noteShot });
+await page.keyboard.press('Tab');
+await page.keyboard.press('Enter'); // Save
+await page.waitForTimeout(500);
 await browser.close();
 
 const item = saved[0];
 const ok = item?.type === 'login' && item.fields.username === 'ann@example.com' && item.fields.password === 'Hunter2-secret!' && item.fields.urls[0]?.url === 'https://shop.example.com';
 console.log(ok ? '✓ trusted submit → prompt → Save stored the login for https://shop.example.com' : `✗ unexpected result: ${JSON.stringify(saved)}`);
-console.log(`screenshot: ${shot}`);
-process.exit(ok ? 0 : 1);
+const withNote = saved[1];
+const okNote = withNote?.type === 'login' && withNote.fields.username === 'bob@example.com' && withNote.notes === 'Team account — ask Ann before rotating';
+console.log(okNote ? '✓ trusted typing → Add note → Save stored the note with the login' : `✗ note not saved: ${JSON.stringify(withNote ?? null)}`);
+console.log(`screenshots: ${shot}, ${noteShot}`);
+process.exit(ok && okNote ? 0 : 1);

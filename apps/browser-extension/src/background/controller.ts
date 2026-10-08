@@ -38,6 +38,7 @@ import { evaluateFill } from './autofill';
 import type { ChromeLike, SenderLike } from './chrome-api';
 import { itemDetail, summarize } from './detail';
 import { TOKEN_KEY } from './platform';
+import type { ServerInfo } from '../shared/protocol';
 import { checkSender } from './sender';
 import type { SavePromptManager } from './save-prompt';
 
@@ -81,6 +82,10 @@ export interface ControllerDeps {
   savePrompt?: Pick<SavePromptManager, 'status' | 'setEnabled' | 'clearNeverList' | 'clearAll'>;
   /** Logger that receives only fixed strings and codes — never payloads. */
   log?: (event: string, detail?: string) => void;
+  /** storage key of this server's session token (default: the legacy global key) */
+  tokenKey?: string;
+  /** current server + switching (index.ts rebuilds the session for the new server) */
+  server?: ServerInfo & { switchTo(url: string, force: boolean): Promise<string> };
 }
 
 const LOCKED_TYPES = new Set<Request['type']>([
@@ -238,6 +243,7 @@ export class BackgroundController {
       clipboardClearSeconds: s.settings.clipboardClearSeconds,
       dataVersion: this.dataVersion,
       webUrl: this.deps.webUrl,
+      ...(this.deps.server ? { server: { url: this.deps.server.url, presets: this.deps.server.presets } } : {}),
     };
   }
 
@@ -394,6 +400,8 @@ export class BackgroundController {
         return { code: 'forbidden', message: msg };
       case 'ZodError':
         return { code: 'invalid_message', message: 'The item is not valid.' };
+      case 'InvalidServerUrlError':
+        return { code: 'invalid_message', message: msg };
       case 'ApiError':
         if (err.isNetwork) return { code: 'network', message: msg };
         if (err.status === 409) return { code: 'conflict', message: msg };
@@ -535,6 +543,10 @@ export class BackgroundController {
         return this.autosave().setEnabled(req.enabled);
       case 'autosave.clearNever':
         return this.autosave().clearNeverList();
+      case 'server.set': {
+        if (!this.deps.server) throw new ControllerError('bad_state', 'Switching servers is not available.');
+        return { url: await this.deps.server.switchTo(req.url, req.force ?? false) } satisfies ResponseMap['server.set'];
+      }
     }
   }
 
@@ -545,7 +557,8 @@ export class BackgroundController {
 
   private async refreshToken() {
     const prev = this.hasToken;
-    this.hasToken = !!(await this.c.storage.local.get(TOKEN_KEY))[TOKEN_KEY];
+    const key = this.deps.tokenKey ?? TOKEN_KEY;
+    this.hasToken = !!(await this.c.storage.local.get(key))[key];
     if (prev !== this.hasToken) this.onSnapshot(this.session.getSnapshot());
   }
 

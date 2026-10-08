@@ -22,14 +22,14 @@ export const senders = {
 
 function area(): StorageAreaLike & { data: Map<string, unknown> } {
   const data = new Map<string, unknown>();
-  const keys = (k: string | string[]) => (Array.isArray(k) ? k : [k]);
+  const keys = (k: string | string[] | null) => (k === null ? [...data.keys()] : Array.isArray(k) ? k : [k]);
   return {
     data,
     get: async (k) => Object.fromEntries(keys(k).filter((x) => data.has(x)).map((x) => [x, structuredClone(data.get(x))])),
     set: async (items) => {
       for (const [k, v] of Object.entries(items)) data.set(k, structuredClone(v));
     },
-    remove: async (k) => {
+    remove: async (k: string | string[]) => {
       for (const x of keys(k)) data.delete(x);
     },
   };

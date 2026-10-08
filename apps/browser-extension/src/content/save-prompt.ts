@@ -143,6 +143,13 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
       .ghost:hover { color: #e8edf3; background: #1a222d; }
       .x { margin-left: auto; color: #7d8896; padding: 2px 6px; }
       .msg { margin-top: 10px; font-size: 12.5px; }
+      .note { display: none; margin-top: 10px; }
+      .note.open { display: block; }
+      textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 56px; max-height: 160px; overflow: auto;
+        white-space: pre-wrap; padding: 8px 10px; border-radius: 8px; border: 1px solid #2e3945; background: #0b1117;
+        color: #e8edf3; font: 13px/1.4 ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      textarea:focus-visible { outline: 2px solid #4fd3c0; outline-offset: 1px; }
+      .hint { color: #7d8896; font-size: 11.5px; margin-top: 4px; }
       .ok { color: #4ad295; } .err { color: #ff8266; }
     `;
     const bar = document.createElement('div');
@@ -156,8 +163,13 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
         <div><div class="title"></div><div class="sub"></div></div>
         <button class="x" data-d="dismiss" aria-label="Close">✕</button>
       </div>
+      <div class="note">
+        <textarea maxlength="2000" aria-label="Note (optional)" placeholder="Note (optional)"></textarea>
+        <div class="hint"></div>
+      </div>
       <div class="row">
         <button class="primary" data-d="${update ? 'update' : 'save'}"></button>
+        <button class="ghost" data-a="note">Add note</button>
         <button class="ghost" data-d="dismiss">Not now</button>
         <button class="ghost" data-d="never">Never for this site</button>
       </div>
@@ -166,13 +178,26 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
     (bar.querySelector('.title') as HTMLElement).textContent = update ? 'Update saved password?' : 'Save password to PassVault?';
     (bar.querySelector('.sub') as HTMLElement).textContent = update ? `${info.itemTitle ?? info.host} · ${info.host}` : info.host + (info.locked ? ' · unlock PassVault to save' : '');
     (bar.querySelector('.primary') as HTMLElement).textContent = update ? 'Update' : 'Save';
+    (bar.querySelector('.hint') as HTMLElement).textContent = update ? 'Added to the existing notes.' : 'Saved with this login.';
     const msg = bar.querySelector('.msg') as HTMLElement;
+    const noteBox = bar.querySelector('.note') as HTMLElement;
+    const noteInput = bar.querySelector('textarea') as HTMLTextAreaElement;
+    // Keep site keyboard shortcuts (bubble-phase handlers) from reacting while typing. This does NOT hide the
+    // note from the page: a page can observe keystrokes in the capture phase (documented in EXTENSION.md).
+    for (const t of ['keydown', 'keyup', 'keypress', 'input']) noteInput.addEventListener(t, (e) => e.stopPropagation());
     bar.addEventListener('click', (e) => {
       if (!e.isTrusted) return; // ignore scripted clicks from the page
       const b = (e.target as Element).closest('button');
+      if (b?.getAttribute('data-a') === 'note') {
+        noteBox.classList.add('open');
+        b.remove();
+        noteInput.focus({ preventScroll: true });
+        return;
+      }
       const decision = b?.getAttribute('data-d');
       if (!decision) return;
-      void send<DecideResult>({ type: 'savePrompt.decide', decision }).then((r) => {
+      const note = decision === 'save' || decision === 'update' ? noteInput.value.trim().slice(0, 2000) : '';
+      void send<DecideResult>({ type: 'savePrompt.decide', decision, ...(note ? { note } : {}) }).then((r) => {
         if (decision === 'dismiss' || decision === 'never') return close();
         if (!r) {
           msg.className = 'msg err';

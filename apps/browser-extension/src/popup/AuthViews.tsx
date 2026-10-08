@@ -4,6 +4,7 @@ import { ExternalLink, Lock, ShieldCheck } from 'lucide-react';
 import { Banner, Button, Checkbox, Field, Input, Logo, SecretInput } from '@passvault/ui';
 import type { PopupState } from '../shared/protocol';
 import { call, copyToClipboard, errorText } from './rpc';
+import { ServerSwitch } from './ServerSwitch';
 
 export function openDashboard(url: string, path = '') {
   void chrome.tabs.create({ url: `${url.replace(/\/+$/, '')}${path}` });
@@ -67,6 +68,11 @@ export function SignIn({ state }: { state: PopupState }) {
           Create an account in the dashboard <ExternalLink className="inline size-3" />
         </button>
       </div>
+      {state.server && (
+        <div className="mt-5">
+          <ServerSwitch key={state.server.url} server={state.server} />
+        </div>
+      )}
     </Shell>
   );
 }
@@ -230,6 +236,11 @@ export function Unlock({ state }: { state: PopupState }) {
           Open dashboard
         </button>
       </div>
+      {state.server && (
+        <div className="mt-5">
+          <ServerSwitch key={state.server.url} server={state.server} />
+        </div>
+      )}
     </Shell>
   );
 }

@@ -3,7 +3,8 @@
  * interface so the controller can be unit-tested with a small in-memory fake.
  */
 export interface StorageAreaLike {
-  get(keys: string | string[]): Promise<Record<string, unknown>>;
+  /** `null` returns every key (used once, for the legacy-storage migration). */
+  get(keys: string | string[] | null): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
   remove(keys: string | string[]): Promise<void>;
 }
@@ -60,6 +61,7 @@ export interface ChromeLike {
   };
   permissions?: {
     contains(p: { origins?: string[]; permissions?: string[] }): Promise<boolean>;
+    remove?(p: { origins?: string[]; permissions?: string[] }): Promise<boolean>;
   };
   offscreen?: {
     createDocument(params: { url: string; reasons: string[]; justification: string }): Promise<void>;

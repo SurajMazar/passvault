@@ -121,6 +121,28 @@ describe('offer to save: capture and decisions', () => {
     expect(it.payload.type === 'login' && it.payload.fields.password).toBe('new-password-9');
   });
 
+  it('saves an optional note with a new login, and appends it to the notes on update', async () => {
+    await env.session.unlock(MASTER);
+    const s = tabSender('https://shop.example.com/login');
+    await env.content({ type: 'savePrompt.submitted', username: 'ann', password: 'pw-first-1' }, s);
+    expect(await env.content({ type: 'savePrompt.decide', decision: 'save', note: '  Work account — billing admin  ' }, s)).toMatchObject({ ok: true });
+    const saved = env.session.getSnapshot().items.find((i) => i.payload.type === 'login')!;
+    expect(saved.payload.notes).toBe('Work account — billing admin');
+
+    await env.content({ type: 'savePrompt.submitted', username: 'ann', password: 'pw-second-2' }, s);
+    expect(await env.content({ type: 'savePrompt.decide', decision: 'update', note: 'Rotated after the incident' }, s)).toMatchObject({ ok: true });
+    const updated = env.session.getSnapshot().items.find((i) => i.id === saved.id)!;
+    expect(updated.payload.notes).toBe('Work account — billing admin\n\nRotated after the incident');
+    expect(updated.payload.type === 'login' && updated.payload.fields.password).toBe('pw-second-2');
+  });
+
+  it('rejects oversized or malformed notes from the page', async () => {
+    const s = tabSender('https://shop.example.com/login');
+    await env.content({ type: 'savePrompt.submitted', username: 'ann', password: 'pw-1' }, s);
+    expect(await env.content({ type: 'savePrompt.decide', decision: 'save', note: 'x'.repeat(2001) }, s)).toBeNull();
+    expect(await env.content({ type: 'savePrompt.decide', decision: 'save', note: { html: '<b>' } }, s)).toBeNull();
+  });
+
   it('follows a post-login redirect on the same site but never to another site', async () => {
     await env.content({ type: 'savePrompt.submitted', username: 'u', password: 'pw-123456' }, tabSender('https://login.example.co.uk/'));
     expect(await env.content({ type: 'savePrompt.pending' }, tabSender('https://www.example.co.uk/home'))).toMatchObject({ show: true });

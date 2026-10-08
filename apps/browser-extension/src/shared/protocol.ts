@@ -88,6 +88,9 @@ export const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('autosave.status') }).strict(),
   z.object({ type: z.literal('autosave.set'), enabled: z.boolean() }).strict(),
   z.object({ type: z.literal('autosave.clearNever') }).strict(),
+  // Switch server. The popup requests host access for it first (Chrome permission prompt);
+  // `force` skips the reachability check ("Switch anyway").
+  z.object({ type: z.literal('server.set'), url: z.string().min(1).max(2048), force: z.boolean().optional() }).strict(),
 ]);
 
 export type Request = z.infer<typeof requestSchema>;
@@ -131,6 +134,14 @@ export interface PopupState {
   /** changes whenever decrypted data changes; popups refetch lists on change */
   dataVersion: number;
   webUrl: string;
+  /** the server this browser is connected to, with the built-in shortcuts */
+  server?: ServerInfo;
+}
+
+export interface ServerInfo {
+  /** API origin, e.g. https://vault.example.com or http://localhost:3000 */
+  url: string;
+  presets: Array<{ id: 'production' | 'local'; label: string; url: string }>;
 }
 
 /** List row. Never contains secret values. */
@@ -256,6 +267,7 @@ export interface ResponseMap {
   'autosave.status': AutoSaveStatus;
   'autosave.set': AutoSaveStatus;
   'autosave.clearNever': AutoSaveStatus;
+  'server.set': { url: string };
 }
 
 /** "Offer to save passwords" setting (requires the optional all-sites host permission). */
