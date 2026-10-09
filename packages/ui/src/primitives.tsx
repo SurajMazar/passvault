@@ -3,6 +3,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -96,13 +97,88 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
 export const inputBase =
   'w-full rounded-lg border border-border-strong bg-surface text-fg placeholder:text-fg-subtle px-3 text-sm shadow-[inset_0_1px_1px_rgb(0_0_0/0.03)] transition-[border-color,box-shadow] focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 focus-visible:outline-none disabled:opacity-60 disabled:bg-surface-3 aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger/15';
 
+/**
+ * Text fields hold hostnames, usernames, keys, commands and names: macOS/iOS
+ * autocorrect, auto-capitalisation and spell-check would silently change them.
+ * Off by default; a field can still opt in.
+ */
+const noAutocorrect = { autoCorrect: 'off', autoCapitalize: 'off', spellCheck: false } as const;
+
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...rest }, ref) {
-  return <input ref={ref} className={cx(inputBase, 'h-9', className)} {...rest} />;
+  return <input ref={ref} className={cx(inputBase, 'h-9', className)} {...noAutocorrect} {...rest} />;
 });
 
 export const TextArea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function TextArea({ className, ...rest }, ref) {
-  return <textarea ref={ref} className={cx(inputBase, 'py-2 min-h-20 leading-relaxed pv-scroll', className)} {...rest} />;
+  return <textarea ref={ref} className={cx(inputBase, 'py-2 min-h-20 leading-relaxed pv-scroll', className)} {...noAutocorrect} {...rest} />;
 });
+
+/** Splits "a, b,c" into trimmed, unique, non-empty tags. */
+export function splitTags(text: string): string[] {
+  return text
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Tags as chips: a comma or Enter turns the typed text into a tag, Backspace in an
+ * empty field removes the last one, pasting "a, b, c" adds three, and leaving the
+ * field keeps what was typed.
+ */
+export function TagInput(props: { id?: string; value: string[]; onChange: (tags: string[]) => void; describedBy?: string; placeholder?: string; maxTags?: number }) {
+  const [text, setText] = useState('');
+  const add = (raw: string) => {
+    const next = [...props.value];
+    for (const t of splitTags(raw)) if (!next.includes(t)) next.push(t);
+    const capped = props.maxTags ? next.slice(0, props.maxTags) : next;
+    if (capped.length !== props.value.length) props.onChange(capped);
+  };
+  const remove = (i: number) => props.onChange(props.value.filter((_, j) => j !== i));
+  return (
+    <div
+      className={cx(inputBase, 'flex min-h-9 flex-wrap items-center gap-1.5 py-1.5 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/15')}
+      onClick={(e) => (e.currentTarget.querySelector('input') as HTMLInputElement | null)?.focus()}
+    >
+      {props.value.map((t, i) => (
+        <span key={t} className="inline-flex max-w-full items-center gap-1 rounded-md bg-accent-soft px-2 py-0.5 text-xs text-accent">
+          <span className="truncate">{t}</span>
+          <button type="button" aria-label={`Remove tag ${t}`} className="opacity-70 hover:opacity-100" onClick={() => remove(i)}>
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        id={props.id}
+        aria-describedby={props.describedBy}
+        value={text}
+        placeholder={props.value.length ? '' : props.placeholder}
+        className="min-w-24 flex-1 bg-transparent text-sm outline-none"
+        {...noAutocorrect}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v.includes(',')) {
+            const cut = v.lastIndexOf(',');
+            add(v.slice(0, cut));
+            setText(v.slice(cut + 1).trimStart());
+          } else setText(v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && text.trim()) {
+            e.preventDefault();
+            add(text);
+            setText('');
+          } else if (e.key === 'Backspace' && !text && props.value.length) {
+            remove(props.value.length - 1);
+          }
+        }}
+        onBlur={() => {
+          if (text.trim()) add(text);
+          setText('');
+        }}
+      />
+    </div>
+  );
+}
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select({ className, children, ...rest }, ref) {
   return (

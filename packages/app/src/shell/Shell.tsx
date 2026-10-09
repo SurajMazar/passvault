@@ -265,6 +265,9 @@ export function Shell() {
             <input
               ref={searchRef}
               type="search"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               aria-label="Search vault"
               placeholder="Search titles, usernames, hosts, tags, variable names…"
               value={ui.query}

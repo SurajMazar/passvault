@@ -52,6 +52,9 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Search 
             aria-controls="pv-palette-list"
             aria-activedescendant={results[active] ? `pv-cmd-${results[active]!.id}` : undefined}
             value={q}
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             onChange={(e) => setQ(e.target.value)}
             placeholder={placeholder}
             className="h-14 flex-1 bg-transparent text-[15px] outline-none placeholder:text-fg-subtle"

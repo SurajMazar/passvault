@@ -155,6 +155,8 @@ export function SecretInput(props: {
           onChange={(e) => props.onChange(e.target.value)}
           placeholder={props.placeholder}
           autoComplete={props.autoComplete ?? 'off'}
+          autoCorrect="off"
+          autoCapitalize="off"
           spellCheck={false}
           aria-describedby={props.describedBy}
           aria-invalid={props.invalid || undefined}

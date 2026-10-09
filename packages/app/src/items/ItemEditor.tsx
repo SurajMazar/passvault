@@ -15,7 +15,7 @@ import {
 } from '@passvault/types';
 import { generatePassword } from '@passvault/crypto';
 import { isValidHost, isValidSshUsername, itemPayloadSchema } from '@passvault/validation';
-import { Banner, Button, Dialog, Field, IconButton, Input, SecretInput, Select, StrengthMeter, TextArea, useToast } from '@passvault/ui';
+import { Banner, Button, Dialog, Field, IconButton, Input, SecretInput, Select, StrengthMeter, TagInput, TextArea, useToast } from '@passvault/ui';
 import { newItem, passwordStrength } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { sshPublicKeyInfo } from './ssh-keys';
@@ -52,7 +52,6 @@ export function ItemEditor() {
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [tagInput, setTagInput] = useState(draft.tags.join(', '));
   const close = () => ui.set({ editor: null });
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }) as Draft);
   const setF = (patch: Record<string, unknown>) => setDraft((d) => ({ ...d, fields: { ...d.fields, ...patch } }) as Draft);
@@ -65,8 +64,7 @@ export function ItemEditor() {
   const envOptions = project ? project.payload.environments.map((e) => e.name) : ['Development', 'Staging', 'Production'];
 
   const save = async () => {
-    const tags = [...new Set(tagInput.split(',').map((t) => t.trim()).filter(Boolean))];
-    const candidate = { ...draft, tags, environment: draft.environment || null } as Draft;
+    const candidate = { ...draft, tags: [...new Set(draft.tags)], environment: draft.environment || null } as Draft;
     if (candidate.type === 'login' && existing?.payload.type === 'login' && existing.payload.fields.password !== candidate.fields.password) {
       candidate.fields.passwordUpdatedAt = new Date().toISOString();
     }
@@ -372,8 +370,8 @@ export function ItemEditor() {
           )}
           <Row>
             <Field label="Category / folder">{(id) => <Input id={id} value={draft.folder} onChange={(e) => set({ folder: e.target.value })} placeholder="e.g. Work/Infra" />}</Field>
-            <Field label="Tags" hint="Comma separated">
-              {(id, d) => <Input id={id} aria-describedby={d} value={tagInput} onChange={(e) => setTagInput(e.target.value)} />}
+            <Field label="Tags" hint="Press comma or Enter to add a tag">
+              {(id, d) => <TagInput id={id} describedBy={d} value={draft.tags} onChange={(tags) => set({ tags })} />}
             </Field>
           </Row>
           <Field label="Description">{(id) => <Input id={id} value={draft.description} onChange={(e) => set({ description: e.target.value })} />}</Field>

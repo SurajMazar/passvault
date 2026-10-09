@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, FolderKanban, GitCompare, Plus, Share2, Star, Users, Pencil, Trash2 } from 'lucide-react';
 import { ITEM_TYPES, ITEM_TYPE_LABELS, type ProjectPayload, type ItemType, type EnvironmentKind } from '@passvault/types';
-import { Badge, Banner, Button, Card, Dialog, EmptyState, EnvBadge, Field, IconButton, Input, Menu, Select, TypeIcon, useConfirm, useToast } from '@passvault/ui';
+import { Badge, Banner, Button, Card, Dialog, EmptyState, EnvBadge, Field, IconButton, Input, Menu, Select, TagInput, TypeIcon, useConfirm, useToast } from '@passvault/ui';
 import { itemSubtitle, newProject, type DecryptedProject } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { EnvDiffTable } from '../env/EnvFileView';
@@ -45,8 +45,8 @@ function ProjectForm({ project, onClose }: { project: DecryptedProject | null; o
       <div className="space-y-3">
         <Field label="Name">{(id) => <Input id={id} data-autofocus value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} />}</Field>
         <Field label="Description">{(id) => <Input id={id} value={p.description} onChange={(e) => setP({ ...p, description: e.target.value })} />}</Field>
-        <Field label="Tags" hint="Comma separated">
-          {(id, d) => <Input id={id} aria-describedby={d} value={p.tags.join(', ')} onChange={(e) => setP({ ...p, tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })} />}
+        <Field label="Tags" hint="Press comma or Enter to add a tag">
+          {(id, d) => <TagInput id={id} describedBy={d} value={p.tags} onChange={(tags) => setP({ ...p, tags })} />}
         </Field>
         <fieldset>
           <legend className="text-xs font-medium text-fg-muted">Environments</legend>
