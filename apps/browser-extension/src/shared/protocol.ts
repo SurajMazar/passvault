@@ -167,6 +167,8 @@ export interface ItemSummary {
   type: ItemType;
   title: string;
   subtitle: string;
+  /** short identifier (the item's description, first line) */
+  identifier: string;
   environment: string | null;
   favorite: boolean;
   shared: boolean;

@@ -504,7 +504,8 @@ export class BackgroundController {
         if (s.isUnlocked) await s.syncNow().catch(() => undefined);
         return this.popupState();
       case 'vault.list': {
-        const all = filterItems(s.getSnapshot().items, { query: req.query ?? '', status: 'active' });
+        // The browser only deals with website logins; SSH keys, .env files and the rest stay in the apps.
+        const all = filterItems(s.getSnapshot().items, { query: req.query ?? '', status: 'active', types: ['login'] });
         const limit = req.limit ?? 200;
         return { items: all.slice(0, limit).map(summarize), total: all.length } satisfies ResponseMap['vault.list'];
       }

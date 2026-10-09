@@ -1,4 +1,4 @@
-import { itemSubtitle, type DecryptedItem } from '@passvault/vault-core';
+import { itemIdentifier, itemSubtitle, type DecryptedItem } from '@passvault/vault-core';
 import type { DetailField, ItemDetail, ItemSummary } from '../shared/protocol';
 
 export function summarize(it: DecryptedItem): ItemSummary {
@@ -7,6 +7,7 @@ export function summarize(it: DecryptedItem): ItemSummary {
     type: it.payload.type,
     title: it.payload.title || '(untitled)',
     subtitle: itemSubtitle(it.payload),
+    identifier: itemIdentifier(it.payload),
     environment: it.payload.environment ?? null,
     favorite: it.favorite,
     shared: it.shared,

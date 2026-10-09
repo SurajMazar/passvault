@@ -43,11 +43,17 @@ export const portSchema = z.int().min(1).max(65535);
 export const sshUsernameSchema = z.string().trim().regex(USERNAME_RE, 'usernames may contain letters, digits, . _ - + @ and must not start with -');
 
 // ---------- Payload schemas ----------
+//
+// Encrypted payloads are read by every installed version of every client. They are
+// loose objects: a field added by a newer client is accepted and kept (and, because
+// editors start from the decrypted payload, saved back unchanged), instead of making
+// the whole item unreadable in an older app. Known fields are still fully validated.
+// Requests to the API (api.ts) stay strict.
 
 const str = (max: number) => z.string().max(max);
 const secret = (max = 100_000) => z.string().max(max);
 
-const customField = z.strictObject({
+const customField = z.looseObject({
   id: z.string().min(1).max(64),
   label: str(200),
   type: z.enum(CUSTOM_FIELD_TYPES),
@@ -69,12 +75,12 @@ const common = {
   customFields: z.array(customField).max(100),
 };
 
-const loginUrl = z.strictObject({
+const loginUrl = z.looseObject({
   url: z.string().trim().min(1).max(2048),
   match: z.enum(URL_MATCH_MODES),
 });
 
-const hostKey = z.strictObject({
+const hostKey = z.looseObject({
   keyType: str(64),
   publicKey: str(4096),
   fingerprint: str(128),
@@ -83,20 +89,20 @@ const hostKey = z.strictObject({
 });
 
 export const itemPayloadSchema = z.discriminatedUnion('type', [
-  z.strictObject({
+  z.looseObject({
     ...common,
     type: z.literal('login'),
-    fields: z.strictObject({
+    fields: z.looseObject({
       username: str(500),
       password: secret(10_000),
       urls: z.array(loginUrl).max(50),
       passwordUpdatedAt: z.string().optional(),
     }),
   }),
-  z.strictObject({
+  z.looseObject({
     ...common,
     type: z.literal('ssh_connection'),
-    fields: z.strictObject({
+    fields: z.looseObject({
       host: hostSchema,
       port: portSchema,
       username: sshUsernameSchema,
@@ -107,10 +113,10 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
       hostKeys: z.array(hostKey).max(20),
     }),
   }),
-  z.strictObject({
+  z.looseObject({
     ...common,
     type: z.literal('ssh_key'),
-    fields: z.strictObject({
+    fields: z.looseObject({
       publicKey: str(16_384),
       privateKey: secret(32_768),
       passphrase: secret(1024).optional(),
@@ -119,10 +125,10 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
       comment: str(500).optional(),
     }),
   }),
-  z.strictObject({
+  z.looseObject({
     ...common,
     type: z.literal('database'),
-    fields: z.strictObject({
+    fields: z.looseObject({
       engine: z.enum(DATABASE_ENGINES),
       host: z.string().trim().max(253),
       port: portSchema.optional(),
@@ -134,10 +140,10 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
       connectionString: secret(10_000).optional(),
     }),
   }),
-  z.strictObject({
+  z.looseObject({
     ...common,
     type: z.literal('api_credential'),
-    fields: z.strictObject({
+    fields: z.looseObject({
       service: z.string().trim().max(200),
       endpoint: str(2048).optional(),
       kind: z.enum(API_CREDENTIAL_KINDS),
@@ -153,10 +159,10 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
         .optional(),
     }),
   }),
-  z.strictObject({
+  z.looseObject({
     ...common,
     type: z.literal('env_file'),
-    fields: z.strictObject({
+    fields: z.looseObject({
       filename: z
         .string()
         .trim()
@@ -167,14 +173,14 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
       variableNotes: z.record(z.string().max(256), z.string().max(5000)),
     }),
   }),
-  z.strictObject({
+  z.looseObject({
     ...common,
     type: z.literal('secure_note'),
-    fields: z.strictObject({ content: secret(1_000_000) }),
+    fields: z.looseObject({ content: secret(1_000_000) }),
   }),
 ]) satisfies z.ZodType<ItemPayload>;
 
-export const projectPayloadSchema = z.strictObject({
+export const projectPayloadSchema = z.looseObject({
   v: z.literal(1),
   name: z.string().trim().min(1).max(200),
   description: str(2000),
@@ -182,7 +188,7 @@ export const projectPayloadSchema = z.strictObject({
   favorite: z.boolean(),
   environments: z
     .array(
-      z.strictObject({
+      z.looseObject({
         id: z.string().min(1).max(64),
         name: z.string().trim().min(1).max(64),
         kind: z.enum(ENVIRONMENT_KINDS),
@@ -192,11 +198,11 @@ export const projectPayloadSchema = z.strictObject({
   trashedAt: z.string().nullable(),
 }) satisfies z.ZodType<ProjectPayload>;
 
-export const userSettingsSchema = z.strictObject({
+export const userSettingsSchema = z.looseObject({
   v: z.literal(1),
   contacts: z.record(
     z.string(),
-    z.strictObject({ email: z.string(), fingerprint: z.string(), publicSigningKey: z.string(), verified: z.boolean(), pinnedAt: z.string() }),
+    z.looseObject({ email: z.string(), fingerprint: z.string(), publicSigningKey: z.string(), verified: z.boolean(), pinnedAt: z.string() }),
   ),
   sharedFavorites: z.array(z.string()).max(10_000),
   lockTimeoutMinutes: z.int().min(0).max(24 * 60),

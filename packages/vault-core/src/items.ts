@@ -58,6 +58,19 @@ export function newProject(name: string, overrides: Partial<ProjectPayload> = {}
 }
 
 /** One-line secondary text for list rows. Never includes secret values. */
+/** Longest identifier the editors accept (older items may hold a longer description). */
+export const IDENTIFIER_MAX = 60;
+
+/**
+ * The item's short identifier, e.g. "personal", "client A", "old 2FA". Stored in the
+ * encrypted payload's `description` (no schema change, so older apps still read
+ * every item); lists show its first line, cut to IDENTIFIER_MAX characters.
+ */
+export function itemIdentifier(p: { description?: string }): string {
+  const first = (p.description ?? '').split('\n')[0]!.trim();
+  return first.length > IDENTIFIER_MAX ? `${first.slice(0, IDENTIFIER_MAX - 1)}…` : first;
+}
+
 export function itemSubtitle(p: ItemPayload): string {
   switch (p.type) {
     case 'login': {

@@ -1,6 +1,6 @@
 {
   "name": "@passvault/desktop",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "type": "module",
   "description": "PassVault macOS desktop app (Neutralinojs shell + pv-helper extension).",
@@ -16,6 +16,7 @@
     "@neutralinojs/lib": "6.10.0",
     "@passvault/app": "workspace:*",
     "@passvault/crypto": "workspace:*",
+    "@passvault/env-parser": "workspace:*",
     "@passvault/sync": "workspace:*",
     "@passvault/types": "workspace:*",
     "@passvault/ui": "workspace:*",

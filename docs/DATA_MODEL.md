@@ -82,3 +82,18 @@ server directly), and SSH-agent signing.
   clients never resurrect deleted items.
 - Mutation idempotency rows: purged after 7 days.
 - Expired sessions and email tokens: purged by a scheduled job.
+
+## Evolving encrypted payloads
+
+Item, project and settings payloads are validated with **loose** schemas
+(`packages/validation/src/items.ts`): every known field is checked, and fields a
+newer client added are accepted and kept. Editors and `updateItem` start from the
+decrypted payload, so an older client saves those fields back unchanged instead of
+dropping them. To extend a payload, add the field as optional; older clients keep
+reading the item. (Before 0.1.16 the schemas were strict, so those versions show
+such items as "created by a newer client".) A new item `type` or a new enum value is
+still unknown to older clients — prefer additive fields. API requests stay strict.
+
+The short **identifier** shown next to an item's title is the payload's
+`description` (first line, `IDENTIFIER_MAX` = 60 characters in editors), so it needed
+no schema change.

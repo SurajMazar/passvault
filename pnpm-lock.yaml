@@ -214,6 +214,9 @@ importers:
       '@passvault/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
+      '@passvault/env-parser':
+        specifier: workspace:*
+        version: link:../../packages/env-parser
       '@passvault/sync':
         specifier: workspace:*
         version: link:../../packages/sync

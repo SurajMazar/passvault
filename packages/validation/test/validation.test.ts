@@ -76,3 +76,31 @@ describe('item payloads', () => {
     expect(r.success).toBe(false);
   });
 });
+
+describe('payload forward compatibility', () => {
+  it('accepts and keeps fields added by newer clients', () => {
+    const payload = {
+      v: 1,
+      type: 'login',
+      title: 'Example',
+      description: '',
+      notes: '',
+      folder: '',
+      tags: [],
+      favorite: false,
+      archived: false,
+      trashedAt: null,
+      customFields: [],
+      futureTopLevel: { any: 'thing' },
+      fields: { username: 'u', password: 'p', totp: '', urls: [], futureField: 42 },
+    };
+    const r = itemPayloadSchema.safeParse(payload);
+    expect(r.success).toBe(true);
+    expect((r.data as Record<string, unknown>).futureTopLevel).toEqual({ any: 'thing' });
+    expect((r.data as { fields: Record<string, unknown> }).fields.futureField).toBe(42);
+  });
+
+  it('still rejects known fields with the wrong shape', () => {
+    expect(itemPayloadSchema.safeParse({ v: 1, type: 'login', title: '', fields: {} }).success).toBe(false);
+  });
+});

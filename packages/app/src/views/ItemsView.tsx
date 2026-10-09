@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ArrowDownAZ, Clock3, Inbox, Plus, Star, Trash2, X, Archive, FolderInput, Tag, AlertTriangle, CloudUpload } from 'lucide-react';
 import { ITEM_TYPES, ITEM_TYPE_LABELS, type ItemType } from '@passvault/types';
 import { Badge, Banner, Button, EmptyState, EnvBadge, IconButton, Input, Menu, Select, TypeIcon, cx, useConfirm, useToast } from '@passvault/ui';
-import { filterItems, itemSubtitle, type DecryptedItem, type ItemFilter } from '@passvault/vault-core';
+import { filterItems, itemSubtitle, type DecryptedItem, type ItemFilter, itemIdentifier } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { ItemDetail } from '../items/ItemDetail';
 import { Invitations } from '../sharing/Invitations';
@@ -222,6 +222,9 @@ export function ItemsView() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-[14px] font-medium">{it.payload.title}</span>
+                    {itemIdentifier(it.payload) && (
+                      <span className="max-w-[40%] shrink-0 truncate rounded-md bg-surface-3 px-1.5 py-px text-[11px] text-fg-muted">{itemIdentifier(it.payload)}</span>
+                    )}
                     {it.favorite && <Star className="size-3 shrink-0 fill-warn text-warn" aria-label="Favorite" />}
                   </div>
                   <div className="mt-0.5 flex min-w-0 items-center gap-1.5">

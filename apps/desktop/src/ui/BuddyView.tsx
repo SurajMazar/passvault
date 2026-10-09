@@ -3,11 +3,12 @@ import { Copy, Dices, Eye, EyeOff, Fingerprint, KeyRound, Lock, Maximize2, Minus
 import { generatePassphrase, generatePassword } from '@passvault/crypto';
 import { ITEM_TYPE_LABELS, type ItemPayload } from '@passvault/types';
 import { Badge, Banner, Button, Field, Input, TextArea, cx } from '@passvault/ui';
-import { computeInsights, filterItems, matchLogin, newItem, type DecryptedItem, type SessionSnapshot, type VaultSession } from '@passvault/vault-core';
+import { computeInsights, filterItems, matchLogin, newItem, type DecryptedItem, type SessionSnapshot, type VaultSession, itemIdentifier } from '@passvault/vault-core';
 import type { MenuBar } from '../shell/menu-bar';
 import { formatShortcut } from '../shell/shortcut';
 import { AVATARS, Avatar, GREETING, RING, avatarFromFile, type AvatarChoice, type Reaction } from './avatars';
 import { HELP_LINES, findTargets, parseIntent, resolveOne } from './assistant';
+import { parseEnv, toDotenvObject } from '@passvault/env-parser';
 
 export type BuddyPanel = 'find' | 'save' | 'generate' | 'avatar';
 
@@ -468,6 +469,8 @@ function Unlock({ session, actions, onFail }: { session: VaultSession; actions: 
 
 function Find({ snap, actions, flash, initialQuery = '' }: { snap: SessionSnapshot; actions: BuddyActions; flash: (m: string) => void; initialQuery?: string }) {
   const [q, setQ] = useState(initialQuery);
+  // .env items: which one shows its keys (each copyable on its own)
+  const [envOpen, setEnvOpen] = useState<string | null>(null);
   const results = useMemo(() => filterItems(snap.items, { query: q, status: 'active' }).slice(0, 40), [snap.items, q]);
   const secs = snap.settings.clipboardClearSeconds;
   const copySecret = (label: string, value: string) =>
@@ -489,24 +492,57 @@ function Find({ snap, actions, flash, initialQuery = '' }: { snap: SessionSnapsh
             acts.push(<Act key="c" label={`Connect to ${p.fields.host}`} onClick={() => void actions.connect(it.id).catch((e: unknown) => flash(e instanceof Error ? e.message : 'Could not connect'))} icon={<Plug className="size-3" />} text="Connect" />);
             if (p.fields.password) acts.push(<Act key="p" label="Copy password" onClick={() => copySecret('Password', p.fields.password!)} icon={<KeyRound className="size-3" />} text="Password" />);
           } else if (p.type === 'env_file') {
-            if (p.fields.content) acts.push(<Act key="e" label="Copy the file contents" onClick={() => copySecret('Variables', p.fields.content)} icon={<Copy className="size-3" />} text=".env" />);
+            if (p.fields.content) {
+              acts.push(
+                <Act
+                  key="k"
+                  label={envOpen === it.id ? 'Hide the variables' : 'Copy one variable'}
+                  onClick={() => setEnvOpen((o) => (o === it.id ? null : it.id))}
+                  icon={<KeyRound className="size-3" />}
+                  text="Keys"
+                />,
+              );
+              acts.push(<Act key="e" label="Copy the whole file" onClick={() => copySecret('All variables', p.fields.content)} icon={<Copy className="size-3" />} text="All" />);
+            }
           } else if (p.type === 'secure_note') {
             const body = p.fields.content ?? '';
             if (body) acts.push(<Act key="n" label="Copy note" onClick={() => copySecret('Note', body)} icon={<Copy className="size-3" />} text="Copy" />);
           }
           return (
-            <li key={it.id} className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2">
-              <I className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-              <button className="min-w-0 flex-1 text-left" onClick={() => actions.openInApp(it.id)} title="Open in PassVault">
-                <div className="truncate text-sm font-medium">{p.title || 'Untitled'}</div>
-                <div className="truncate text-xs text-fg-subtle">{subtitle(it)}</div>
-              </button>
-              <div className="flex shrink-0 gap-1">{acts}</div>
+            <li key={it.id} className="rounded-lg hover:bg-surface-2">
+              <div className="group flex items-center gap-2 px-2 py-1.5">
+                <I className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                <button className="min-w-0 flex-1 text-left" onClick={() => actions.openInApp(it.id)} title="Open in PassVault">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-medium">{p.title || 'Untitled'}</span>
+                    {itemIdentifier(p) && <span className="max-w-[45%] shrink-0 truncate rounded bg-surface-3 px-1.5 py-px text-[10px] text-fg-muted">{itemIdentifier(p)}</span>}
+                  </div>
+                  <div className="truncate text-xs text-fg-subtle">{subtitle(it)}</div>
+                </button>
+                <div className="flex shrink-0 gap-1">{acts}</div>
+              </div>
+              {p.type === 'env_file' && envOpen === it.id && <EnvKeys content={p.fields.content} onCopy={(key, value) => copySecret(key, value)} />}
             </li>
           );
         })}
       </ul>
     </div>
+  );
+}
+
+/** One row per variable of a .env item (the value in effect: the last occurrence), each copyable. */
+function EnvKeys({ content, onCopy }: { content: string; onCopy: (key: string, value: string) => void }) {
+  const vars = useMemo(() => Object.entries(toDotenvObject(parseEnv(content))), [content]);
+  if (vars.length === 0) return <p className="px-8 pb-2 text-[11px] text-fg-subtle">No variables in this file.</p>;
+  return (
+    <ul className="pv-view-in mx-2 mb-2 flex max-h-56 flex-col overflow-y-auto rounded-md border border-border pv-scroll">
+      {vars.map(([key, value]) => (
+        <li key={key} className="flex items-center gap-2 border-b border-border px-2 py-1 last:border-b-0">
+          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg">{key}</code>
+          <Act label={`Copy the value of ${key}`} onClick={() => onCopy(key, value)} icon={<Copy className="size-3" />} text="Copy" />
+        </li>
+      ))}
+    </ul>
   );
 }
 

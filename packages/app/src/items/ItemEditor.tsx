@@ -16,7 +16,7 @@ import {
 import { generatePassword } from '@passvault/crypto';
 import { isValidHost, isValidSshUsername, itemPayloadSchema } from '@passvault/validation';
 import { Banner, Button, Dialog, Field, IconButton, Input, SecretInput, Select, StrengthMeter, TagInput, TextArea, useToast } from '@passvault/ui';
-import { newItem, passwordStrength } from '@passvault/vault-core';
+import { newItem, passwordStrength, IDENTIFIER_MAX } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { sshPublicKeyInfo } from './ssh-keys';
 
@@ -374,7 +374,18 @@ export function ItemEditor() {
               {(id, d) => <TagInput id={id} describedBy={d} value={draft.tags} onChange={(tags) => set({ tags })} />}
             </Field>
           </Row>
-          <Field label="Description">{(id) => <Input id={id} value={draft.description} onChange={(e) => set({ description: e.target.value })} />}</Field>
+          <Field label="Identifier" hint={`Short label shown next to the title and found by search, e.g. “personal” or “client A” (up to ${IDENTIFIER_MAX} characters).`}>
+            {(id, d) => (
+              <Input
+                id={id}
+                aria-describedby={d}
+                maxLength={Math.max(IDENTIFIER_MAX, draft.description.length)}
+                value={draft.description}
+                placeholder="e.g. personal"
+                onChange={(e) => set({ description: e.target.value })}
+              />
+            )}
+          </Field>
           <Field label="Private notes" hint="Encrypted. Rendered as plain text.">
             {(id, d) => <TextArea id={id} aria-describedby={d} rows={3} value={draft.notes} onChange={(e) => set({ notes: e.target.value })} />}
           </Field>
