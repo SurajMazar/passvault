@@ -4,13 +4,15 @@ import '@passvault/ui/styles.css';
 import { PassVaultApp, type AuthRoute } from '@passvault/app';
 import { IndexedDbStore } from '@passvault/sync';
 import { BrowserClipboard, type Platform } from '@passvault/vault-core';
+import { createPasskeyUnlock } from './passkey-unlock';
 
 /**
  * Web platform adapter.
  *  - Session token: sessionStorage (cleared when the tab closes). The vault
  *    can still be unlocked offline from the encrypted IndexedDB cache.
  *  - Cache: IndexedDB, ciphertext only, one database per account.
- *  - No native capabilities (no biometrics, SSH, or agent) are bundled.
+ *  - Fingerprint unlock through a passkey on this device (passkey-unlock.ts).
+ *  - No native capabilities (SSH or agent) are bundled.
  */
 const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -64,6 +66,7 @@ const platform: Platform = {
     return storeCache.get(name)!;
   },
   clipboard: new BrowserClipboard(),
+  biometrics: createPasskeyUnlock({ get: (k) => prefs.get(`pv-${k}`), set: (k, v) => prefs.set(`pv-${k}`, v), remove: (k) => prefs.remove(`pv-${k}`) }),
   files: {
     pickTextFile: ({ maxBytes }) =>
       new Promise((resolve, reject) => {

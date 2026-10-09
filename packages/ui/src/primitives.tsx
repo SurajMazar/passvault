@@ -182,7 +182,7 @@ export function TagInput(props: { id?: string; value: string[]; onChange: (tags:
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select({ className, children, ...rest }, ref) {
   return (
-    <select ref={ref} className={cx(inputBase, 'h-9 pr-8', className)} {...rest}>
+    <select ref={ref} className={cx(inputBase, 'pv-select h-9 cursor-pointer appearance-none pr-9', className)} {...rest}>
       {children}
     </select>
   );

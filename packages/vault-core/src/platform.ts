@@ -37,6 +37,10 @@ export interface FileAdapter {
 }
 
 export interface BiometricUnlockAdapter {
+  /** What the user calls it here: "Touch ID" (default), "Windows Hello", … */
+  label?: string;
+  /** One sentence on where the unlock key lives (Settings). */
+  description?: string;
   status(): Promise<{ available: boolean; reason?: string }>;
   /** Store a device unlock key protected by biometrics. */
   storeKey(accountId: string, key: Uint8Array): Promise<void>;

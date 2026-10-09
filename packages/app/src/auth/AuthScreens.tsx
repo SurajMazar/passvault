@@ -602,7 +602,7 @@ export function LockedScreen() {
               }
             }}
           >
-            Unlock with Touch ID
+            Unlock with {session.platformRef.biometrics?.label ?? 'Touch ID'}
           </Button>
         )}
         <Button

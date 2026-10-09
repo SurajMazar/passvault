@@ -407,7 +407,13 @@ function PreferencesTab() {
         </div>
       </Section>
       {session.platformRef.biometrics && (
-        <Section title="Touch ID" description="Keeps a device-only key that only your fingerprint can release: the Keychain on signed builds, otherwise this Mac’s Secure Enclave. That key unwraps your vault key on this Mac; your master password always works too.">
+        <Section
+          title={session.platformRef.biometrics.label ?? 'Touch ID'}
+          description={
+            session.platformRef.biometrics.description ??
+            'Keeps a device-only key that only your fingerprint can release: the Keychain on signed builds, otherwise this Mac’s Secure Enclave. That key unwraps your vault key on this Mac; your master password always works too.'
+          }
+        >
           {!bio ? (
             <Spinner />
           ) : !bio.available ? (
@@ -424,7 +430,7 @@ function PreferencesTab() {
                   toast(errorMessage(e), 'error');
                 }
               }}
-              label="Unlock with Touch ID"
+              label={`Unlock with ${session.platformRef.biometrics.label ?? 'Touch ID'}`}
             />
           )}
         </Section>

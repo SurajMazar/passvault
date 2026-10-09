@@ -618,7 +618,7 @@ function QuickSave({ session, snap, flash, onDone, initialSite = '' }: { session
       {matches.length > 0 && (
         <Field label="Saved login for this site">
           {(id) => (
-            <select id={id} className="h-9 rounded-lg border border-border bg-surface px-2 text-sm" value={target} onChange={(e) => setTarget(e.target.value)}>
+            <select id={id} className="pv-select h-9 cursor-pointer appearance-none rounded-lg border border-border bg-surface pl-2 pr-9 text-sm" value={target} onChange={(e) => setTarget(e.target.value)}>
               {matches.map((m) => (
                 <option key={m.id} value={m.id}>
                   Update “{m.payload.title}”
