@@ -37,15 +37,18 @@ function isDarkNow() {
   return t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 }
 
-const TYPE_NAV: Array<{ id: ItemType; label: string }> = [
-  { id: 'login', label: 'Logins' },
-  { id: 'ssh_connection', label: 'SSH & servers' },
-  { id: 'ssh_key', label: 'SSH keys' },
-  { id: 'database', label: 'Databases' },
-  { id: 'api_credential', label: 'API credentials' },
-  { id: 'env_file', label: 'Environment files' },
-  { id: 'secure_note', label: 'Secure notes' },
-];
+/** One sidebar section per item type: a Record, so a new type cannot be left out. */
+const TYPE_NAV_LABELS: Record<ItemType, string> = {
+  login: 'Logins',
+  payment_card: 'Payment cards',
+  ssh_connection: 'SSH & servers',
+  ssh_key: 'SSH keys',
+  database: 'Databases',
+  api_credential: 'API credentials',
+  env_file: 'Environment files',
+  secure_note: 'Secure notes',
+};
+const TYPE_NAV = (Object.entries(TYPE_NAV_LABELS) as Array<[ItemType, string]>).map(([id, label]) => ({ id, label }));
 
 function NavButton({ id, icon, label, count, badge }: { id: NavId; icon: ReactNode; label: string; count?: number; badge?: ReactNode }) {
   const nav = useUi((s) => s.nav);

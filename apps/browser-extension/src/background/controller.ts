@@ -41,6 +41,7 @@ import {
 } from '../shared/protocol';
 import { pvCaptureCredentials, pvFillCard, pvFillCredentials, type PageFillResult } from '../inject/page-functions';
 import { evaluateFill } from './autofill';
+import { extrasToCustomFields } from './extras';
 import type { ChromeLike, SenderLike } from './chrome-api';
 import { itemDetail, summarize } from './detail';
 import { TOKEN_KEY } from './platform';
@@ -136,6 +137,7 @@ const captureResultSchema = z.object({
   username: z.string().max(500),
   password: z.string().max(4096),
   foundPasswordField: z.boolean(),
+  extras: z.array(z.object({ label: z.string().min(1).max(100), value: z.string().max(500) })).max(5).default([]),
 });
 const cardFillResultSchema = z.object({
   code: z.enum(['filled', 'origin_mismatch', 'no_card_field', 'not_top_frame']),
@@ -144,6 +146,7 @@ const cardFillResultSchema = z.object({
 const fillResultSchema = z.object({
   code: z.enum(['filled', 'origin_mismatch', 'no_password_field', 'not_top_frame']),
   filledUsername: z.boolean(),
+  filledExtras: z.number().int().min(0).max(10).optional(),
 });
 
 export class ControllerError extends Error {
@@ -577,6 +580,7 @@ export class BackgroundController {
             urls: [{ url: d.match === 'host' || d.match === 'base_domain' ? u.origin : u.href, match: d.match }],
             passwordUpdatedAt: new Date().toISOString(),
           },
+          customFields: extrasToCustomFields(d.extras ?? []),
         });
         const id = await s.saveItem(payload);
         return { id } satisfies ResponseMap['item.saveLogin'];
@@ -710,7 +714,7 @@ export class BackgroundController {
       results = await this.c.scripting.executeScript({
         target: { tabId, frameIds: [0] },
         func: pvFillCredentials,
-        args: [d.origin, d.username, d.password],
+        args: [d.origin, d.username, d.password, d.extras],
       });
     } catch {
       return { status: 'refused', reason: 'injection_failed', message: 'PassVault could not access this page.' };
@@ -795,7 +799,9 @@ export class BackgroundController {
       username: r.username,
       password: r.password,
       foundPasswordField: r.foundPasswordField,
+      extras: r.extras,
       existing,
     };
   }
 }
+

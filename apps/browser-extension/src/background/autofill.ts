@@ -2,7 +2,7 @@ import { matchLogin, pageOrigin, type DecryptedItem } from '@passvault/vault-cor
 import type { FillResponse } from '../shared/protocol';
 
 export type FillDecision =
-  | { ok: true; origin: string; insecure: boolean; username: string; password: string }
+  | { ok: true; origin: string; insecure: boolean; username: string; password: string; extras: Array<{ label: string; value: string }> }
   | { ok: false; response: FillResponse };
 
 const refuse = (reason: Extract<FillResponse, { status: 'refused' }>['reason'], message: string): FillDecision => ({
@@ -27,5 +27,10 @@ export function evaluateFill(item: DecryptedItem | undefined, pageUrl: string | 
   const m = matchLogin(urls, pageUrl);
   if (!m) return refuse('no_match', 'This login is not saved for this website. Copy the password instead if you are sure.');
   if (m.insecure && !confirmInsecure) return { ok: false, response: { status: 'needs_confirmation', reason: 'insecure', origin } };
-  return { ok: true, origin, insecure: m.insecure, username, password };
+  // Non-secret custom fields (e.g. an AWS account ID) go into the matching page fields.
+  const extras = item.payload.customFields
+    .filter((cf) => ['text', 'email', 'number', 'url'].includes(cf.type) && cf.label.trim() && cf.value)
+    .slice(0, 10)
+    .map((cf) => ({ label: cf.label, value: cf.value }));
+  return { ok: true, origin, insecure: m.insecure, username, password, extras };
 }

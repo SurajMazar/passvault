@@ -73,6 +73,10 @@ export const requestSchema = z.discriminatedUnion('type', [
           folder: short(200),
           tags: z.array(z.string().min(1).max(50)).max(20),
           projectId: id.nullable(),
+          extras: z
+            .array(z.object({ label: z.string().min(1).max(100), value: z.string().max(500) }).strict())
+            .max(5)
+            .optional(),
         })
         .strict(),
     })
@@ -256,6 +260,8 @@ export interface CaptureResponse {
   username: string;
   password: string;
   foundPasswordField: boolean;
+  /** other filled fields of the form (saved as custom fields) */
+  extras: Array<{ label: string; value: string }>;
   /** existing logins for this page with the same username */
   existing: Array<{ id: string; title: string; username: string; passwordDiffers: boolean; readOnly: boolean }>;
 }

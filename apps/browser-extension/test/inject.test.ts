@@ -60,7 +60,7 @@ describe('injected fill function', () => {
     const uEvents = track(document.getElementById('u')!);
     const pEvents = track(document.getElementById('p')!);
     const r = fill('https://example.com', 'alice@example.com', 's3cret');
-    expect(r).toEqual({ code: 'filled', filledUsername: true });
+    expect(r).toEqual({ code: 'filled', filledUsername: true, filledExtras: 0 });
     const v = (id: string) => (document.getElementById(id) as HTMLInputElement).value;
     expect(v('u')).toBe('alice@example.com');
     expect(v('p')).toBe('s3cret');
@@ -85,7 +85,7 @@ describe('injected fill function', () => {
     let shadowed = '';
     Object.defineProperty(p, 'value', { configurable: true, get: () => shadowed, set: (x: string) => void (shadowed = `framework:${x}`) });
     const r = fill('https://example.com', '', 'pw');
-    expect(r).toEqual({ code: 'filled', filledUsername: false });
+    expect(r).toEqual({ code: 'filled', filledUsername: false, filledExtras: 0 });
     expect(shadowed).toBe(''); // instance setter bypassed
     delete (p as unknown as { value?: string }).value;
     expect(p.value).toBe('pw');
@@ -121,5 +121,28 @@ describe('injected capture function', () => {
     // Fill likewise ignores the iframe's password field.
     expect(fill('https://example.com', 'u', 'p').code).toBe('no_password_field');
     expect((doc.querySelector('input[type=password]') as HTMLInputElement).value).toBe('frame-secret');
+  });
+});
+
+describe('login forms with an extra field (AWS IAM: account, username, password)', () => {
+  const awsForm = (account = '', user = '') => `<form>
+    <label for="account">Account ID or alias</label><input id="account" name="account" type="text" value="${account}">
+    <label for="username">IAM username</label><input id="username" name="username" type="text" value="${user}">
+    <label for="password">Password</label><input id="password" name="password" type="password"></form>`;
+
+  it('fills the username into the username field and the account from a custom field', () => {
+    document.body.innerHTML = awsForm();
+    const r = fill('https://example.com', 'alice', 'secret', [{ label: 'Account ID or alias', value: '123456789012' }]);
+    expect(r).toEqual({ code: 'filled', filledUsername: true, filledExtras: 1 });
+    expect((document.getElementById('username') as HTMLInputElement).value).toBe('alice');
+    expect((document.getElementById('account') as HTMLInputElement).value).toBe('123456789012');
+  });
+
+  it('captures the account as an extra field, not as the username', () => {
+    document.body.innerHTML = awsForm('123456789012', 'alice');
+    (document.getElementById('password') as HTMLInputElement).value = 'secret';
+    const c = capture();
+    expect(c.username).toBe('alice');
+    expect(c.extras).toEqual([{ label: 'Account ID or alias', value: '123456789012' }]);
   });
 });

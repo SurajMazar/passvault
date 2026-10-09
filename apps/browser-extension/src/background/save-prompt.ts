@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { matchLogin, newItem, pageOrigin, siteKey, type DecryptedItem, type SessionSnapshot, type VaultSession } from '@passvault/vault-core';
 import type { ChromeLike, SenderLike } from './chrome-api';
+import { extrasToCustomFields, mergeExtras, type FormExtra } from './extras';
 
 /**
  * "Offer to save passwords" — background side.
@@ -28,7 +29,17 @@ export const AUTOSAVE_ORIGINS = ['https://*/*', 'http://*/*'];
 export const PENDING_TTL_MS = 3 * 60_000;
 
 export const contentMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('savePrompt.submitted'), username: z.string().max(500), password: z.string().min(1).max(4096) }).strict(),
+  z
+    .object({
+      type: z.literal('savePrompt.submitted'),
+      username: z.string().max(500),
+      password: z.string().min(1).max(4096),
+      extras: z
+        .array(z.object({ label: z.string().min(1).max(100), value: z.string().max(500) }).strict())
+        .max(5)
+        .optional(),
+    })
+    .strict(),
   z.object({ type: z.literal('savePrompt.pending') }).strict(),
   z
     .object({
@@ -55,6 +66,8 @@ interface Pending {
   itemId?: string;
   itemTitle?: string;
   createdAt: number;
+  /** other fields of the form (e.g. "Account ID"), saved as custom fields */
+  extras?: FormExtra[];
 }
 
 type SessionPart = Pick<VaultSession, 'getSnapshot' | 'saveItem' | 'updateItem' | 'isUnlocked'>;
@@ -141,7 +154,7 @@ export class SavePromptManager {
     this.expire();
     switch (parsed.data.type) {
       case 'savePrompt.submitted':
-        return this.onSubmitted(tabId, url, parsed.data.username, parsed.data.password);
+        return this.onSubmitted(tabId, url, parsed.data.username, parsed.data.password, parsed.data.extras ?? []);
       case 'savePrompt.pending':
         return this.promptFor(tabId, url);
       case 'savePrompt.decide':
@@ -149,7 +162,7 @@ export class SavePromptManager {
     }
   }
 
-  private async onSubmitted(tabId: number, url: string, username: string, password: string): Promise<PromptInfo> {
+  private async onSubmitted(tabId: number, url: string, username: string, password: string, extras: FormExtra[]): Promise<PromptInfo> {
     const origin = pageOrigin(url)!;
     const site = siteKey(url);
     if (!site || this.ownOrigins.includes(origin)) return { show: false };
@@ -169,7 +182,7 @@ export class SavePromptManager {
         itemTitle = existing.payload.title;
       }
     }
-    this.pending.set(tabId, { tabId, origin, site, host, username, password, action, itemId, itemTitle, createdAt: this.now() });
+    this.pending.set(tabId, { tabId, origin, site, host, username, password, action, itemId, itemTitle, extras, createdAt: this.now() });
     await this.persist();
     return { show: true, action, host, itemTitle, locked: !this.session.isUnlocked };
   }
@@ -213,6 +226,7 @@ export class SavePromptManager {
             pl.fields.password = p.password;
             pl.fields.passwordUpdatedAt = new Date().toISOString();
             pl.notes = appendNote(pl.notes);
+            pl.customFields = mergeExtras(pl.customFields, p.extras ?? []);
           }
         });
         await this.drop(tabId);
@@ -230,6 +244,7 @@ export class SavePromptManager {
                 pl.fields.passwordUpdatedAt = new Date().toISOString();
               }
               pl.notes = appendNote(pl.notes);
+              pl.customFields = mergeExtras(pl.customFields, p.extras ?? []);
             }
           });
         }
@@ -241,6 +256,7 @@ export class SavePromptManager {
           title: p.host.replace(/^www\./, ''),
           notes: note,
           fields: { username: p.username, password: p.password, urls: [{ url: p.origin, match: 'host' }], passwordUpdatedAt: new Date().toISOString() },
+          customFields: extrasToCustomFields(p.extras ?? []),
         }),
       );
       await this.drop(tabId);

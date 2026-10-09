@@ -46,7 +46,7 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
   // ------------------------------------------------------------ capture
 
   const TEXTISH = new Set(['text', 'email', 'tel', '']);
-  const USERISH = /user|email|login|account|identifier|e-mail/i;
+  const USERISH = /user|e-?mail|login|identifier/i;
   let lastSent = '';
 
   function visible(el: HTMLElement): boolean {
@@ -55,7 +55,7 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
     return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
   }
 
-  function findCredentials(root: ParentNode): { username: string; password: string } | null {
+  function findCredentials(root: ParentNode): { username: string; password: string; extras: Array<{ label: string; value: string }> } | null {
     const inputs = Array.from(root.querySelectorAll('input')).filter((i) => i.type !== 'hidden' && !i.disabled);
     const pw = inputs.find((i) => i.type === 'password' && i.value && visible(i));
     if (!pw) return null;
@@ -64,11 +64,26 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
     const password = (filledPw[filledPw.length - 1] ?? pw).value;
     const scope = pw.form ? inputs.filter((i) => i.form === pw.form) : inputs;
     const before = scope.filter((i) => TEXTISH.has(i.type) && i.value && i.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
+    // Username: marked as such, else named user/email/login, else (last resort) "account".
+    const hint = (i: HTMLInputElement) => `${i.name} ${i.id} ${i.getAttribute('autocomplete') || ''}`;
     const u =
       before.find((i) => (i.getAttribute('autocomplete') || '').split(/\s+/).includes('username')) ??
-      before.filter((i) => USERISH.test(`${i.name} ${i.id} ${i.getAttribute('autocomplete') || ''}`)).pop() ??
+      before.filter((i) => USERISH.test(hint(i)) && !/account|alias|tenant|org/i.test(hint(i))).pop() ??
+      before.filter((i) => /account/i.test(hint(i)) || USERISH.test(hint(i))).pop() ??
       before.pop();
-    return { username: (u?.value || '').trim().slice(0, 500), password: password.slice(0, 4096) };
+    // Other filled fields of the form (e.g. an AWS account ID) become custom fields of the login.
+    const labelOf = (i: HTMLInputElement) => {
+      const forLabel = i.id ? Array.from(document.querySelectorAll('label')).find((l) => l.htmlFor === i.id)?.textContent : '';
+      const raw = forLabel || i.closest('label')?.textContent || i.getAttribute('aria-label') || i.placeholder || i.name || i.id || '';
+      return raw.replace(/\s+/g, ' ').trim().slice(0, 100);
+    };
+    const extras: Array<{ label: string; value: string }> = [];
+    for (const i of before) {
+      if (i === u || !i.value.trim() || extras.length >= 5) continue;
+      const label = labelOf(i);
+      if (label) extras.push({ label, value: i.value.trim().slice(0, 500) });
+    }
+    return { username: (u?.value || '').trim().slice(0, 500), password: password.slice(0, 4096), extras };
   }
 
   function submitted(root: ParentNode) {
@@ -77,7 +92,7 @@ type DecideResult = { ok: true; message: string } | { ok: false; code: string; m
     const key = `${c.username}\u0000${c.password}`;
     if (key === lastSent) return; // submit + click often both fire
     lastSent = key;
-    void send<PromptInfo>({ type: 'savePrompt.submitted', username: c.username, password: c.password }).then((info) => {
+    void send<PromptInfo>({ type: 'savePrompt.submitted', username: c.username, password: c.password, extras: c.extras }).then((info) => {
       if (info && info.show) render(info);
     });
   }

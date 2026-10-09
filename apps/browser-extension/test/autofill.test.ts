@@ -37,7 +37,7 @@ describe('autofill policy (background)', () => {
     expect(injected).toBe(true);
     const inj = fc.injections.at(-1)!;
     expect(inj.target).toEqual({ tabId: 1, frameIds: [0] });
-    expect(inj.args).toEqual(['https://example.com', 'alice', 'pw-example']);
+    expect(inj.args).toEqual(['https://example.com', 'alice', 'pw-example', []]);
     expect(inj.func.name).toBe('pvFillCredentials');
   });
 

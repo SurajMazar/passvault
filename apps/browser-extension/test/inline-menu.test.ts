@@ -73,7 +73,7 @@ describe('inline suggestions in login fields', () => {
     expect(await env.send({ type: 'inline.fill', itemId: shop }, tabSender('https://shop.example.com/login'))).toEqual({ ok: true });
     const inj = env.dev.fc.injections.at(-1)!;
     expect(inj.target).toEqual({ tabId: TAB, frameIds: [0] });
-    expect(inj.args).toEqual(['https://shop.example.com', 'ann', 'shop-secret']);
+    expect(inj.args).toEqual(['https://shop.example.com', 'ann', 'shop-secret', []]);
     // another site's login, asked for by this page: refused, nothing injected
     const before = env.dev.fc.injections.length;
     const r = await env.send({ type: 'inline.fill', itemId: bank }, tabSender('https://shop.example.com/login'));

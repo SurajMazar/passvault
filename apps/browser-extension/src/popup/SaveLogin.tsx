@@ -28,6 +28,8 @@ export function SaveLogin({ tabId, onDone }: { tabId: number; onDone: () => void
   const [tags, setTags] = useState('');
   const [projectId, setProjectId] = useState('');
   const [notes, setNotes] = useState('');
+  // other fields of the login form (e.g. "Account ID or alias"), saved as custom fields
+  const [extras, setExtras] = useState<Array<{ label: string; value: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +41,7 @@ export function SaveLogin({ tabId, onDone }: { tabId: number; onDone: () => void
         setUsername(c.username);
         setPassword(c.password);
         setUrl(c.origin);
+        setExtras(c.extras);
       })
       .catch((e) => setLoadError(errorText(e)));
     void call({ type: 'vault.meta' })
@@ -75,6 +78,7 @@ export function SaveLogin({ tabId, onDone }: { tabId: number; onDone: () => void
             .map((t) => t.trim())
             .filter(Boolean),
           projectId: projectId || null,
+          extras,
         },
       });
       toast('Login saved to your vault.', 'success');
@@ -189,6 +193,21 @@ export function SaveLogin({ tabId, onDone }: { tabId: number; onDone: () => void
                 </Select>
               )}
             </Field>
+          )}
+          {extras.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] font-medium text-fg">Also saved from this form</span>
+              {extras.map((x, i) => (
+                <div key={`${x.label}-${i}`} className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs">
+                  <span className="min-w-0 flex-1 truncate" title={`${x.label}: ${x.value}`}>
+                    <span className="text-fg-subtle">{x.label}:</span> {x.value}
+                  </span>
+                  <button type="button" className="text-fg-subtle hover:text-fg" aria-label={`Don’t save ${x.label}`} onClick={() => setExtras((xs) => xs.filter((_, j) => j !== i))}>
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
           <Field label="Notes">{(id) => <TextArea id={id} value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="min-h-12" />}</Field>
           {error && <Banner tone="danger">{error}</Banner>}

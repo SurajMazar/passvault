@@ -11,6 +11,14 @@
 export interface PageFillResult {
   code: 'filled' | 'origin_mismatch' | 'no_password_field' | 'not_top_frame';
   filledUsername: boolean;
+  /** extra fields (e.g. "Account ID") filled from the login's custom fields */
+  filledExtras?: number;
+}
+
+/** A field beside username and password, e.g. AWS's "Account ID or alias". */
+export interface PageExtraField {
+  label: string;
+  value: string;
 }
 
 export interface PageCaptureResult {
@@ -21,13 +29,15 @@ export interface PageCaptureResult {
   username: string;
   password: string;
   foundPasswordField: boolean;
+  /** other filled text fields of the same form (saved as custom fields) */
+  extras: PageExtraField[];
 }
 
 /**
  * Fill a username/password into the current page.
  * TOCTOU guard: does nothing unless `location.origin === expectedOrigin`.
  */
-export function pvFillCredentials(expectedOrigin: string, username: string, password: string): PageFillResult {
+export function pvFillCredentials(expectedOrigin: string, username: string, password: string, extras: PageExtraField[] = []): PageFillResult {
   if (window.top !== window) return { code: 'not_top_frame', filledUsername: false };
   if (location.origin !== expectedOrigin) return { code: 'origin_mismatch', filledUsername: false };
 
@@ -58,10 +68,12 @@ export function pvFillCredentials(expectedOrigin: string, username: string, pass
   const before = scope.filter(
     (i) => textTypes.includes(i.type) && i.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING,
   );
-  const userish = /user|email|login|account|identifier|e-mail/i;
+  // Username: marked as such, else named user/email/login, else (last resort) "account".
+  const hint = (i: HTMLInputElement) => `${i.name} ${i.id} ${i.getAttribute('autocomplete') || ''}`;
   const userField =
     before.find((i) => (i.getAttribute('autocomplete') || '').split(/\s+/).includes('username')) ??
-    before.filter((i) => userish.test(`${i.name} ${i.id} ${i.getAttribute('autocomplete') || ''}`)).pop() ??
+    before.filter((i) => /user|e-?mail|login|identifier/i.test(hint(i)) && !/account|alias|tenant|org/i.test(hint(i))).pop() ??
+    before.filter((i) => /account|user|e-?mail|login|identifier/i.test(hint(i))).pop() ??
     before.pop() ??
     null;
 
@@ -79,9 +91,26 @@ export function pvFillCredentials(expectedOrigin: string, username: string, pass
     setValue(userField, username);
     filledUsername = true;
   }
+  // Extra fields of this form, matched to the login's custom fields by label/name.
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const labelOf = (i: HTMLInputElement) => {
+    const forLabel = i.id ? Array.from(document.querySelectorAll('label')).find((l) => l.htmlFor === i.id)?.textContent : '';
+    return norm(`${forLabel || ''} ${i.closest('label')?.textContent || ''} ${i.getAttribute('aria-label') || ''} ${i.placeholder || ''} ${i.name} ${i.id}`);
+  };
+  let filledExtras = 0;
+  const others = scope.filter((i) => i !== pick && i !== userField && i.type !== 'password' && [...textTypes, 'number', 'url'].includes(i.type));
+  for (const x of extras.slice(0, 10)) {
+    const want = norm(x.label);
+    if (want.length < 2 || !x.value) continue;
+    const target = others.find((i) => labelOf(i).includes(want) || (want.includes(norm(i.name || i.id)) && norm(i.name || i.id).length >= 3));
+    if (!target) continue;
+    setValue(target, x.value);
+    others.splice(others.indexOf(target), 1);
+    filledExtras++;
+  }
   setValue(pick, password);
   pick.blur();
-  return { code: 'filled', filledUsername };
+  return { code: 'filled', filledUsername, filledExtras };
 }
 
 /**
@@ -89,25 +118,38 @@ export function pvFillCredentials(expectedOrigin: string, username: string, pass
  * "Save login from this page" flow. Never descends into iframes.
  */
 export function pvCaptureCredentials(): PageCaptureResult {
-  const empty = { origin: '', url: '', title: '', username: '', password: '', foundPasswordField: false };
+  const empty = { origin: '', url: '', title: '', username: '', password: '', foundPasswordField: false, extras: [] };
   if (window.top !== window) return { code: 'not_top_frame', ...empty };
 
   const inputs = Array.from(document.querySelectorAll('input')).filter((i) => i.type !== 'hidden' && !i.disabled);
   const passwords = inputs.filter((i) => i.type === 'password');
   const pick = passwords.find((p) => p.value) ?? passwords[0] ?? null;
   let username = '';
+  const extras: PageExtraField[] = [];
   if (pick) {
     const scope = pick.form ? inputs.filter((i) => i.form === pick.form) : inputs;
     const textTypes = ['text', 'email', 'tel', ''];
     const before = scope.filter(
       (i) => textTypes.includes(i.type) && i.value && i.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    const userish = /user|email|login|account|identifier|e-mail/i;
+    const hint = (i: HTMLInputElement) => `${i.name} ${i.id} ${i.getAttribute('autocomplete') || ''}`;
     const u =
       before.find((i) => (i.getAttribute('autocomplete') || '').split(/\s+/).includes('username')) ??
-      before.filter((i) => userish.test(`${i.name} ${i.id}`)).pop() ??
+      before.filter((i) => /user|e-?mail|login|identifier/i.test(hint(i)) && !/account|alias|tenant|org/i.test(hint(i))).pop() ??
+      before.filter((i) => /account|user|e-?mail|login|identifier/i.test(hint(i))).pop() ??
       before.pop();
     username = u ? u.value.trim() : '';
+    // Other filled text fields of the form (e.g. an account ID): kept as custom fields.
+    const labelOf = (i: HTMLInputElement) => {
+      const forLabel = i.id ? Array.from(document.querySelectorAll('label')).find((l) => l.htmlFor === i.id)?.textContent : '';
+      const raw = forLabel || i.closest('label')?.textContent || i.getAttribute('aria-label') || i.placeholder || i.name || i.id || '';
+      return raw.replace(/\s+/g, ' ').trim().slice(0, 100);
+    };
+    for (const i of before) {
+      if (i === u || !i.value.trim() || extras.length >= 5) continue;
+      const label = labelOf(i);
+      if (label) extras.push({ label, value: i.value.trim().slice(0, 500) });
+    }
   }
   return {
     code: 'ok',
@@ -117,6 +159,7 @@ export function pvCaptureCredentials(): PageCaptureResult {
     username: username.slice(0, 500),
     password: pick ? pick.value.slice(0, 4096) : '',
     foundPasswordField: !!pick,
+    extras,
   };
 }
 
