@@ -62,11 +62,34 @@ export interface LoginUrl {
   match: UrlMatchMode;
 }
 
+/**
+ * A passkey (WebAuthn credential) PassVault created for a site and signs with.
+ * ES256 (P-256) only; the private key is the secret part.
+ */
+export interface StoredPasskey {
+  /** base64url credential ID */
+  credentialId: string;
+  /** relying-party ID, e.g. "github.com" */
+  rpId: string;
+  rpName: string;
+  /** base64url user handle chosen by the site */
+  userHandle: string;
+  userName: string;
+  userDisplayName: string;
+  /** COSE algorithm; -7 = ES256 */
+  alg: -7;
+  /** base64url PKCS#8 private key */
+  privateKey: string;
+  createdAt: string;
+}
+
 export interface LoginFields {
   username: string;
   password: string;
   urls: LoginUrl[];
   passwordUpdatedAt?: string;
+  /** passkeys for this site (0.1.20+; older clients keep them untouched) */
+  passkeys?: StoredPasskey[];
 }
 
 export const SSH_AUTH_METHODS = ['password', 'key', 'agent', 'keyboard_interactive'] as const;
@@ -259,7 +282,7 @@ export const DEFAULT_USER_SETTINGS: UserSettingsPayload = {
 
 /** Which fields of each type are secret (masked by default, never logged). */
 export const SECRET_FIELDS: { [K in ItemType]: Array<keyof ItemFieldsByType[K]> } = {
-  login: ['password'],
+  login: ['password', 'passkeys'],
   ssh_connection: ['password'],
   ssh_key: ['privateKey', 'passphrase'],
   database: ['password', 'connectionString'],

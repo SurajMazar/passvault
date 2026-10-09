@@ -22,6 +22,11 @@ export const AUTOSAVE_ENABLED_KEY = 'pv.autoSave.enabled';
 export const NEVER_SAVE_KEY = 'pv.autoSave.never';
 /** Inline suggestions in login fields (inline-menu.ts): false = turned off; on by default with all-sites access. */
 export const INLINE_ENABLED_KEY = 'pv.inline.enabled';
+/** "Save and use passkeys" (on by default once the all-sites permission is granted) */
+export const PASSKEYS_ENABLED_KEY = 'pv.passkeys.enabled';
+export const PASSKEY_SCRIPT_IDS = ['pv-passkey-main', 'pv-passkey-bridge'];
+/** Passkeys only on secure pages (and local development). */
+export const PASSKEY_ORIGINS = ['https://*/*', 'http://localhost/*'];
 export const PENDING_KEY = 'pv.autoSave.pending';
 export const NOTE_MAX = 2000;
 export const CONTENT_SCRIPT_ID = 'pv-save-prompt';
@@ -94,19 +99,20 @@ export class SavePromptManager {
 
   // ---------------------------------------------------------------- settings
 
-  async status(): Promise<{ enabled: boolean; inline: boolean; permission: boolean; neverCount: number }> {
-    const s = await this.c.storage.local.get([AUTOSAVE_ENABLED_KEY, NEVER_SAVE_KEY, INLINE_ENABLED_KEY]);
+  async status(): Promise<{ enabled: boolean; inline: boolean; passkeys: boolean; permission: boolean; neverCount: number }> {
+    const s = await this.c.storage.local.get([AUTOSAVE_ENABLED_KEY, NEVER_SAVE_KEY, INLINE_ENABLED_KEY, PASSKEYS_ENABLED_KEY]);
     const permission = (await this.c.permissions?.contains({ origins: AUTOSAVE_ORIGINS })) ?? false;
     return {
       enabled: s[AUTOSAVE_ENABLED_KEY] === true && permission,
       inline: s[INLINE_ENABLED_KEY] !== false && permission,
+      passkeys: s[PASSKEYS_ENABLED_KEY] !== false && permission,
       permission,
       neverCount: ((s[NEVER_SAVE_KEY] as string[] | undefined) ?? []).length,
     };
   }
 
   /** Called after the popup obtained (or the user removed) the optional host permission. */
-  async setEnabled(enabled: boolean): Promise<{ enabled: boolean; inline: boolean; permission: boolean; neverCount: number }> {
+  async setEnabled(enabled: boolean): Promise<{ enabled: boolean; inline: boolean; passkeys: boolean; permission: boolean; neverCount: number }> {
     const permission = (await this.c.permissions?.contains({ origins: AUTOSAVE_ORIGINS })) ?? false;
     await this.c.storage.local.set({ [AUTOSAVE_ENABLED_KEY]: enabled && permission });
     await this.syncRegistration();
@@ -114,8 +120,15 @@ export class SavePromptManager {
   }
 
   /** Inline suggestions in login fields (same content script and permission). */
-  async setInline(enabled: boolean): Promise<{ enabled: boolean; inline: boolean; permission: boolean; neverCount: number }> {
+  async setInline(enabled: boolean): Promise<{ enabled: boolean; inline: boolean; passkeys: boolean; permission: boolean; neverCount: number }> {
     await this.c.storage.local.set({ [INLINE_ENABLED_KEY]: enabled });
+    await this.syncRegistration();
+    return this.status();
+  }
+
+  /** Save and use passkeys (page script + bridge, same permission). */
+  async setPasskeys(enabled: boolean): Promise<{ enabled: boolean; inline: boolean; passkeys: boolean; permission: boolean; neverCount: number }> {
+    await this.c.storage.local.set({ [PASSKEYS_ENABLED_KEY]: enabled });
     await this.syncRegistration();
     return this.status();
   }
@@ -138,6 +151,17 @@ export class SavePromptManager {
       ]);
     } else if (!enabled && existing.length > 0) {
       await scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] });
+    }
+    // Passkeys: the page-world wrapper must run before the site's own scripts (document_start).
+    const pk = await scripting.getRegisteredContentScripts({ ids: PASSKEY_SCRIPT_IDS });
+    if (st.passkeys && pk.length < PASSKEY_SCRIPT_IDS.length) {
+      if (pk.length) await scripting.unregisterContentScripts({ ids: pk.map((x) => x.id) });
+      await scripting.registerContentScripts([
+        { id: 'pv-passkey-bridge', matches: PASSKEY_ORIGINS, js: ['passkey-bridge.js'], runAt: 'document_start', allFrames: false, persistAcrossSessions: true, world: 'ISOLATED' },
+        { id: 'pv-passkey-main', matches: PASSKEY_ORIGINS, js: ['passkey-main.js'], runAt: 'document_start', allFrames: false, persistAcrossSessions: true, world: 'MAIN' },
+      ]);
+    } else if (!st.passkeys && pk.length > 0) {
+      await scripting.unregisterContentScripts({ ids: pk.map((x) => x.id) });
     }
   }
 

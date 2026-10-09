@@ -1,3 +1,4 @@
+import type { PasskeyRequestView } from '../background/passkeys';
 import type { ServerProfileView } from '@passvault/ui';
 import type { ServerCheck } from '@passvault/vault-core/servers';
 import { z } from 'zod';
@@ -101,6 +102,15 @@ export const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('autosave.set'), enabled: z.boolean() }).strict(),
   z.object({ type: z.literal('autosave.clearNever') }).strict(),
   z.object({ type: z.literal('inline.set'), enabled: z.boolean() }).strict(),
+  z.object({ type: z.literal('passkeys.set'), enabled: z.boolean() }).strict(),
+  z
+    .object({
+      type: z.literal('passkey.decide'),
+      id: z.string().uuid(),
+      action: z.enum(['approve', 'fallback', 'cancel']),
+      credentialId: z.string().regex(/^[A-Za-z0-9_-]{1,1400}$/).optional(),
+    })
+    .strict(),
   // Server connection. The popup requests host access for an address first (Chrome
   // permission prompt). A new address is applied only after a successful
   // compatibility check; a saved server can be switched to offline (cached data).
@@ -148,6 +158,8 @@ export interface PopupState {
   hasSession: boolean;
   /** locked: Touch ID unlock is set up and usable */
   biometricAvailable?: boolean;
+  /** a site's passkey request waiting for the user's decision */
+  passkey?: PasskeyRequestView | null;
   online: boolean;
   sync: { state: string; lastSyncAt: string | null; lastError: string | null; pending: number; failed: number; conflicts: number };
   lockTimeoutMinutes: number;
@@ -309,6 +321,8 @@ export interface ResponseMap {
   'clipboard.scheduleClear': { scheduled: boolean; seconds: number };
   'autosave.status': AutoSaveStatus;
   'autosave.set': AutoSaveStatus;
+  'passkeys.set': AutoSaveStatus;
+  'passkey.decide': { ok: boolean; message?: string };
   'autosave.clearNever': AutoSaveStatus;
   'inline.set': AutoSaveStatus;
   'server.check': ServerCheck;
@@ -333,6 +347,8 @@ export interface AutoSaveStatus {
   enabled: boolean;
   /** suggestions in login fields (inline menu) */
   inline: boolean;
+  /** save and use passkeys */
+  passkeys: boolean;
   permission: boolean;
   neverCount: number;
 }

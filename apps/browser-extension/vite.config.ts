@@ -98,9 +98,13 @@ export default defineConfig(({ mode }) => {
           offscreen: resolve(root, 'offscreen.html'),
           background: resolve(root, 'src/background/index.ts'),
           'save-prompt': resolve(root, 'src/content/save-prompt.ts'),
+          'passkey-main': resolve(root, 'src/content/passkey-main.ts'),
+          'passkey-bridge': resolve(root, 'src/content/passkey-bridge.ts'),
         },
         output: {
-          entryFileNames: (chunk) => (chunk.name === 'background' ? 'background.js' : chunk.name === 'save-prompt' ? 'save-prompt.js' : 'assets/[name]-[hash].js'),
+          // Content scripts keep fixed names (registered by path) and must not import chunks.
+          entryFileNames: (chunk) =>
+            ['background', 'save-prompt', 'passkey-main', 'passkey-bridge'].includes(chunk.name) ? `${chunk.name}.js` : 'assets/[name]-[hash].js',
           chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash][extname]',
         },

@@ -30,7 +30,7 @@ export interface SenderLike {
 
 export interface ChromeLike {
   /** toolbar popup (inline menu: "Unlock" opens it when Chrome allows) */
-  action?: { openPopup?(): Promise<void> };
+  action?: { openPopup?(): Promise<void>; setBadgeText?(d: { text: string }): Promise<void> };
   runtime: {
     id: string;
     getURL(path: string): string;
@@ -53,7 +53,9 @@ export interface ChromeLike {
     create(props: { url: string }): Promise<unknown>;
   };
   scripting: {
-    registerContentScripts?(scripts: Array<{ id: string; matches: string[]; js: string[]; runAt?: 'document_idle' | 'document_end' | 'document_start'; allFrames?: boolean; persistAcrossSessions?: boolean }>): Promise<void>;
+    registerContentScripts?(
+      scripts: Array<{ id: string; matches: string[]; js: string[]; runAt?: 'document_idle' | 'document_end' | 'document_start'; allFrames?: boolean; persistAcrossSessions?: boolean; world?: 'ISOLATED' | 'MAIN' }>,
+    ): Promise<void>;
     unregisterContentScripts?(filter: { ids: string[] }): Promise<void>;
     getRegisteredContentScripts?(filter: { ids: string[] }): Promise<Array<{ id: string }>>;
     executeScript(injection: {

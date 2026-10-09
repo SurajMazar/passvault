@@ -119,3 +119,18 @@ export function siteKey(pageUrl: string): string | null {
   if (isIpOrSingleLabel(u.hostname)) return u.hostname;
   return getDomain(u.hostname, { allowPrivateDomains: true }) ?? u.hostname;
 }
+
+/**
+ * WebAuthn relying-party ID rule: the RP ID must be the page's host or a parent
+ * domain of it, and never a public suffix ("com", "github.io"). Localhost is its own RP.
+ */
+export function isValidRpIdForHost(rpId: string, host: string): boolean {
+  const r = rpId.toLowerCase().replace(/\.$/, '');
+  const h = host.toLowerCase().replace(/\.$/, '').replace(/:\d+$/, '');
+  if (!r || !h) return false;
+  if (h === 'localhost') return r === 'localhost';
+  if (h !== r && !h.endsWith(`.${r}`)) return false;
+  const registrable = getDomain(h, { allowPrivateDomains: true });
+  if (!registrable) return false;
+  return r === registrable || r.endsWith(`.${registrable}`);
+}

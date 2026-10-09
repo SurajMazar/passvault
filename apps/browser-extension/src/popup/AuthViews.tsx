@@ -230,6 +230,13 @@ export function Unlock({ state }: { state: PopupState }) {
   };
   return (
     <Shell title="PassVault is locked" subtitle={state.email}>
+      {state.passkey && (
+        <div className="mb-3">
+          <Banner tone="neutral">
+            Unlock to {state.passkey.kind === 'create' ? 'save a passkey for' : 'sign in with a passkey to'} {state.passkey.host}.
+          </Banner>
+        </div>
+      )}
       <form onSubmit={submit} className="flex flex-col gap-3">
         <Field label="Master password">{(id) => <SecretInput id={id} value={password} onChange={setPassword} autoComplete="current-password" />}</Field>
         {error && <Banner tone="danger">{error}</Banner>}

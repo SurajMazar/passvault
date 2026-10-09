@@ -2,6 +2,7 @@ import { Banner, Spinner } from '@passvault/ui';
 import { MfaEnroll, MfaVerify, RecoveryCodes, SignIn, Unlock } from './AuthViews';
 import { usePopupState } from './rpc';
 import { VaultView } from './VaultView';
+import { PasskeyPrompt } from './PasskeyPrompt';
 
 export function App() {
   const { state, error } = usePopupState();
@@ -31,6 +32,6 @@ export function App() {
     case 'locked':
       return <Unlock state={state} />;
     case 'unlocked':
-      return <VaultView state={state} />;
+      return state.passkey ? <PasskeyPrompt state={state} /> : <VaultView state={state} />;
   }
 }

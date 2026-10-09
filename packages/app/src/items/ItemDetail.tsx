@@ -16,6 +16,7 @@ import {
   Trash2,
   Users,
   AlertTriangle,
+  KeyRound,
 } from 'lucide-react';
 import { ITEM_TYPE_LABELS, URL_MATCH_LABELS, isProductionEnvironment, type ItemPayload } from '@passvault/types';
 import { Badge, Banner, Button, Card, EnvBadge, FieldRow, IconButton, Menu, TypeIcon, cx, useConfirm, useToast } from '@passvault/ui';
@@ -307,6 +308,7 @@ export function ItemDetail({ item, onClose }: { item: DecryptedItem; onClose: ()
           <Fields item={item} />
         </Card>
       )}
+      {p.type === 'login' && (p.fields.passkeys?.length ?? 0) > 0 && <Passkeys item={item as DecryptedItem & { payload: ItemPayload<'login'> }} />}
 
       {p.type === 'login' && p.fields.urls[0] && (
         <div className="flex gap-2">
@@ -388,5 +390,55 @@ export function ItemDetail({ item, onClose }: { item: DecryptedItem; onClose: ()
         <dd>{item.revision || 'not yet synced'}</dd>
       </dl>
     </article>
+  );
+}
+
+/** Passkeys saved for this login by the browser extension (sign-in happens there). */
+function Passkeys({ item }: { item: DecryptedItem & { payload: ItemPayload<'login'> } }) {
+  const { session } = useApp();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const readOnly = item.role === 'viewer';
+  const remove = async (credentialId: string, label: string) => {
+    const ok = await confirm({
+      title: 'Delete this passkey?',
+      body: <p>You will no longer be able to sign in to {label} with it from PassVault. Make sure the site has another way for you to sign in.</p>,
+      confirmLabel: 'Delete passkey',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await session.updateItem(item.id, (np) => {
+        if (np.type === 'login') np.fields.passkeys = (np.fields.passkeys ?? []).filter((x) => x.credentialId !== credentialId);
+      });
+      toast('Passkey deleted.', 'success');
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+    }
+  };
+  return (
+    <Card title="Passkeys">
+      <ul className="divide-y divide-border">
+        {(item.payload.fields.passkeys ?? []).map((pk) => (
+          <li key={pk.credentialId} className="flex items-center gap-3 py-2.5">
+            <KeyRound className="size-4 shrink-0 text-accent" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium" title={pk.userName}>
+                {pk.userName || pk.userDisplayName || '(no username)'}
+              </div>
+              <div className="truncate text-xs text-fg-subtle" title={pk.rpId}>
+                {pk.rpId} · created {new Date(pk.createdAt).toLocaleDateString()}
+              </div>
+            </div>
+            {!readOnly && (
+              <Button size="sm" variant="ghost" onClick={() => void remove(pk.credentialId, pk.rpId)}>
+                Delete
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="pt-2 text-xs text-fg-subtle">Sign in with these from the PassVault browser extension (Settings → Save and use passkeys).</p>
+    </Card>
   );
 }

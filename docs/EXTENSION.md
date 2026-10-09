@@ -419,3 +419,33 @@ label fallbacks, month/year dropdowns supported. Card forms inside cross-origin
 iframes (hosted payment fields) cannot be reached; the copy buttons (number, expiry,
 CVV, name) cover those, and copied numbers and codes are cleared from the clipboard
 like passwords.
+
+## Passkeys (0.1.20)
+
+With **Save and use passkeys** on (Settings; needs the same all-sites permission as
+suggestions), PassVault acts as a passkey provider:
+
+- `passkey-main.js` runs in the page's MAIN world at `document_start` (top frame,
+  https and `http://localhost` only) and wraps `navigator.credentials.create/get` for
+  `publicKey` requests; `passkey-bridge.js` (isolated world) forwards them to the
+  background. Conditional (autofill) requests and non-passkey credentials stay with
+  the browser.
+- The background (`background/passkeys.ts`) takes the origin from `sender.url`
+  (top frame), requires the RP ID to be that host or a parent domain that is not a
+  public suffix, and never answers on PassVault's own pages. Nothing is created or
+  signed until the user approves in PassVault's popup (opened automatically, or by the
+  toolbar icon when Chrome refuses); **Use another device** returns the request to
+  Chrome, and closing the popup does the same.
+- `background/webauthn.ts` is the authenticator: ES256 (P-256) keys, "none"
+  attestation, flags UP+UV+BE+BS, signature counter 0, `clientDataJSON` built from
+  the browser-reported origin. Passkeys are stored in the matching login's
+  `fields.passkeys` (private key = secret), end-to-end encrypted and synced; the
+  dashboard lists and deletes them.
+- When the vault is locked, a passkey request first asks to unlock (Touch ID or
+  master password). When unlocked and PassVault has no passkey for the site, sign-in
+  requests go straight to Chrome without asking.
+
+Tests: `test/webauthn.test.ts` (relying-party parse + signature verification),
+`test/passkeys.test.ts` (flows and refusals), and
+`pnpm --filter @passvault/e2e-video check:passkey-page` (the built page script in
+real Chromium returns objects sites accept).

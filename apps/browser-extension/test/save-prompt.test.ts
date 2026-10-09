@@ -55,11 +55,17 @@ describe('offer to save: setting and registration', () => {
     const st = unwrap<{ enabled: boolean }>(await env.popup({ type: 'autosave.set', enabled: true }));
     expect(st.enabled).toBe(true);
     expect(env.registered.get(CONTENT_SCRIPT_ID)).toMatchObject({ matches: AUTOSAVE_ORIGINS, js: ['save-prompt.js'], allFrames: false });
+    // passkeys (on by default with the permission): page-world wrapper + bridge, secure pages only, before the site's scripts
+    expect(env.registered.get('pv-passkey-main')).toMatchObject({ js: ['passkey-main.js'], world: 'MAIN', runAt: 'document_start', allFrames: false, matches: ['https://*/*', 'http://localhost/*'] });
+    expect(env.registered.get('pv-passkey-bridge')).toMatchObject({ js: ['passkey-bridge.js'], world: 'ISOLATED', runAt: 'document_start', allFrames: false });
     await env.popup({ type: 'autosave.set', enabled: false });
     // inline suggestions (on by default with the permission) still need the content script
-    expect(env.registered.size).toBe(1);
+    expect(env.registered.has(CONTENT_SCRIPT_ID)).toBe(true);
     const off = unwrap<{ enabled: boolean; inline: boolean }>(await env.popup({ type: 'inline.set', enabled: false }));
     expect(off).toMatchObject({ enabled: false, inline: false });
+    expect(env.registered.has(CONTENT_SCRIPT_ID)).toBe(false);
+    const noPasskeys = unwrap<{ passkeys: boolean }>(await env.popup({ type: 'passkeys.set', enabled: false }));
+    expect(noPasskeys.passkeys).toBe(false);
     expect(env.registered.size).toBe(0);
   });
 

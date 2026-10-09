@@ -49,6 +49,7 @@ import type { ServerCheck } from '@passvault/vault-core/servers';
 import type { ServerInfo, TouchIdStatus } from '../shared/protocol';
 import { checkSender } from './sender';
 import type { SavePromptManager } from './save-prompt';
+import type { PasskeyManager } from './passkeys';
 
 export const RESUME_KEY = 'pv.resumeUserKey';
 export const CLIPBOARD_PENDING_KEY = 'pv.clipboardClearPending';
@@ -91,7 +92,7 @@ export interface ControllerDeps {
   session: SessionLike;
   webUrl: string;
   /** opt-in "offer to save passwords" feature (content-script side is in save-prompt.ts) */
-  savePrompt?: Pick<SavePromptManager, 'status' | 'setEnabled' | 'setInline' | 'clearNeverList' | 'clearAll'>;
+  savePrompt?: Pick<SavePromptManager, 'status' | 'setEnabled' | 'setInline' | 'setPasskeys' | 'clearNeverList' | 'clearAll'>;
   /** Logger that receives only fixed strings and codes — never payloads. */
   log?: (event: string, detail?: string) => void;
   /** storage key of this server's session token (default: the legacy global key) */
@@ -100,6 +101,8 @@ export interface ControllerDeps {
   server?: ServerControl;
   /** Touch ID availability (the platform's biometrics adapter) */
   touchIdStatus?: () => Promise<{ available: boolean; reason?: string }>;
+  /** passkey requests from pages (background/passkeys.ts) */
+  passkeys?: Pick<PasskeyManager, 'view' | 'decide' | 'clear'>;
 }
 
 /** What the controller may do with the server connection (implemented by ServerManager). */
@@ -198,6 +201,7 @@ export class BackgroundController {
       this.pendingAfterLock = this.afterLocked();
       // Captured-but-unsaved passwords never outlive an unlocked session.
       void this.deps.savePrompt?.clearAll();
+      this.deps.passkeys?.clear();
     });
     this.ready = this.start();
   }
@@ -281,6 +285,7 @@ export class BackgroundController {
       ...(a.phase === 'recovery_codes' ? { recoveryCodes: a.codes } : {}),
       hasSession: a.phase === 'locked' ? a.hasSession : (a.phase === 'unlocked' || a.phase === 'recovery_codes') && this.hasToken,
       ...(a.phase === 'locked' ? { biometricAvailable: a.biometricAvailable } : {}),
+      passkey: this.deps.passkeys?.view() ?? null,
       online: s.online,
       sync: {
         state: s.sync.state,
@@ -625,6 +630,13 @@ export class BackgroundController {
         return this.autosave().clearNeverList();
       case 'inline.set':
         return this.autosave().setInline(req.enabled);
+      case 'passkeys.set':
+        return this.autosave().setPasskeys(req.enabled);
+      case 'passkey.decide': {
+        const r = await (this.deps.passkeys?.decide(req.id, req.action, req.credentialId) ?? { ok: false, message: 'Passkeys are not available.' });
+        this.pushState();
+        return r satisfies ResponseMap['passkey.decide'];
+      }
       case 'server.check':
         return (await this.servers().check(req.url)) satisfies ResponseMap['server.check'];
       case 'server.set':

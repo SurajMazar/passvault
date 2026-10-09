@@ -38,12 +38,39 @@ export function AutoSaveSettings() {
       if (on && !status?.permission) {
         next = feature === 'inline' ? await call({ type: 'autosave.set', enabled: false }) : await call({ type: 'inline.set', enabled: false });
       }
-      if (!next.enabled && !next.inline) {
+      if (!next.enabled && !next.inline && !next.passkeys) {
         await chrome.permissions.remove({ origins: ORIGINS }).catch(() => false);
         next = await call({ type: 'autosave.status' });
       }
       setStatus(next);
       if (on) toast(feature === 'inline' ? 'Click a login field on a website to see your saved logins.' : 'PassVault will offer to save passwords after you sign in to sites.', 'success');
+    } catch (e) {
+      toast(errorText(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const togglePasskeys = async (on: boolean) => {
+    setBusy(true);
+    try {
+      const hadPermission = !!status?.permission;
+      if (on && !hadPermission) {
+        // Must run directly in the click handler (user gesture) inside the popup.
+        if (!(await chrome.permissions.request({ origins: ORIGINS }))) {
+          toast('Permission not granted — PassVault cannot handle passkeys on websites.', 'warn');
+          return;
+        }
+      }
+      let next = await call({ type: 'passkeys.set', enabled: on });
+      // Granting the permission for passkeys alone does not switch the other features on.
+      if (on && !hadPermission && next.inline) next = await call({ type: 'inline.set', enabled: false });
+      if (!next.enabled && !next.inline && !next.passkeys) {
+        await chrome.permissions.remove({ origins: ORIGINS }).catch(() => false);
+        next = await call({ type: 'autosave.status' });
+      }
+      setStatus(next);
+      if (on) toast('PassVault will offer to save passkeys and sign you in with them.', 'success');
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -67,8 +94,15 @@ export function AutoSaveSettings() {
         label="Offer to save passwords"
         description="After you sign in to a website, ask whether to save or update the login."
       />
+      <Switch
+        checked={!!status?.passkeys}
+        disabled={busy || !status}
+        onChange={(v) => void togglePasskeys(v)}
+        label="Save and use passkeys"
+        description="When a site creates or asks for a passkey, PassVault offers to keep it and sign you in with it. You approve each time; “Use another device” hands it back to Chrome."
+      />
       <Banner tone="neutral">
-        Both need Chrome’s permission to read pages on all sites. Suggestions show only titles and usernames; a password is filled only
+        These need Chrome’s permission to read pages on all sites. Suggestions show only titles and usernames; a password is filled only
         into the site it is saved for, after your click. Captured passwords stay inside the extension, are never shown to the page, and are
         discarded after 3 minutes or when the vault locks. PassVault’s own pages are excluded: your master password is never offered for
         saving. Reload open tabs after turning these on.

@@ -13,6 +13,7 @@ import { BackgroundController } from './controller';
 import { createLogger } from './log';
 import { createExtensionPlatform, tokenKey } from './platform';
 import { checkSender } from './sender';
+import { PasskeyManager } from './passkeys';
 import { SavePromptManager } from './save-prompt';
 import { InlineMenuManager, isInlineMessage } from './inline-menu';
 import { ServerManager, defaultServer, loadProfiles, migrateLegacyStorage, serverScope, webUrlFor } from './servers';
@@ -28,6 +29,7 @@ interface Runtime {
   controller: BackgroundController;
   savePrompt: SavePromptManager;
   inline: InlineMenuManager;
+  passkeys: PasskeyManager;
 }
 
 /** Everything bound to one server. Changing servers replaces the whole runtime. */
@@ -39,6 +41,13 @@ function boot(server: string, servers: ServerManager): Runtime {
   // Never offer to save passwords typed into PassVault's own pages.
   const own = [...new Set([new URL(webUrl).origin, new URL(server).origin])];
   const savePrompt = new SavePromptManager(c, session, own);
+  // Passkeys never for PassVault's own pages (their sign-in is the master password).
+  let pushPasskeyState = () => undefined as void;
+  const passkeys = new PasskeyManager(c, session, {
+    enabled: async () => (await savePrompt.status()).passkeys,
+    changed: () => pushPasskeyState(),
+    ownOrigins: own,
+  });
   const controller = new BackgroundController({
     chrome: c,
     session,
@@ -48,11 +57,13 @@ function boot(server: string, servers: ServerManager): Runtime {
     tokenKey: tokenKey(scope),
     server: servers,
     touchIdStatus: () => platform.biometrics?.status() ?? Promise.resolve({ available: false }),
+    passkeys,
   });
+  pushPasskeyState = () => controller.pushState();
   const inline = new InlineMenuManager(c, session, own, { matches: (tabId) => controller.matches(tabId), fill: (tabId, id, insecure) => controller.fill(tabId, id, insecure) });
   void savePrompt.syncRegistration().catch(() => log('autosave registration failed'));
   controller.ready.catch(() => log('startup failed'));
-  return { server, session, controller, savePrompt, inline };
+  return { server, session, controller, savePrompt, inline, passkeys };
 }
 
 /**
@@ -67,6 +78,7 @@ async function activate(url: string, servers: ServerManager): Promise<void> {
   await rt.controller.lock('server switch');
   rt.session.dispose();
   await rt.savePrompt.clearAll();
+  rt.passkeys.clear();
   const next = boot(url, servers);
   current = Promise.resolve(next);
   await next.controller.ready.catch(() => undefined);
@@ -138,7 +150,12 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     // Messages from web-page tabs can only be the opt-in save-prompt content script;
     // they are handled (and validated) separately and never reach privileged handlers.
     sender.tab
-      ? (isInlineMessage(message) ? rt.inline.handle(message, sender) : rt.savePrompt.handle(message, sender)).catch(() => null)
+      ? (isPasskeyMessage(message)
+          ? rt.passkeys.handle(message, sender)
+          : isInlineMessage(message)
+            ? rt.inline.handle(message, sender)
+            : rt.savePrompt.handle(message, sender)
+        ).catch(() => null)
       : rt.controller.handleMessage(message, sender),
   ).then(sendResponse, () => sendResponse(null));
   return true; // async response
@@ -154,6 +171,10 @@ chrome.runtime.onConnect.addListener((port) => {
   let closed = false;
   port.onDisconnect.addListener(() => {
     closed = true;
+    // A passkey request still waiting when the last popup closes goes back to the browser.
+    setTimeout(() => {
+      if (ports.size === 0) void current.then((rt) => rt.passkeys.popupClosed());
+    }, 1500);
     // Touch ID calls this popup was relaying can no longer be answered.
     for (const [id, call] of nativeCalls) {
       if (call.port !== port) continue;
@@ -189,3 +210,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 self.addEventListener('online', () => void current.then((rt) => rt.session.setOnline(true)));
 self.addEventListener('offline', () => void current.then((rt) => rt.session.setOnline(false)));
+
+function isPasskeyMessage(m: unknown): boolean {
+  return !!m && typeof m === 'object' && (m as { type?: unknown }).type === 'passkey.request';
+}

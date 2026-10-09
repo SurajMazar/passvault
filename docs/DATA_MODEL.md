@@ -106,3 +106,11 @@ secret fields. Lists and search see only the brand, the last four digits and the
 expiry (`vault-core/src/cards.ts`); expired and soon-expiring cards (60 days) appear
 in the health overview. Versions before 0.1.18 do not know the type and list cards
 as "created by a newer client".
+
+## Passkeys on logins (`fields.passkeys`, 0.1.20)
+
+An optional array on login items: `{ credentialId, rpId, rpName, userHandle,
+userName, userDisplayName, alg: -7, privateKey, createdAt }` (base64url values;
+`privateKey` is PKCS#8 and secret). Written by the browser extension when a site
+creates a passkey; up to 20 per login. Older clients (0.1.16+) keep the field
+untouched thanks to the loose payload schemas.

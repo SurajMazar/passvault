@@ -97,6 +97,22 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
       password: secret(10_000),
       urls: z.array(loginUrl).max(50),
       passwordUpdatedAt: z.string().optional(),
+      passkeys: z
+        .array(
+          z.looseObject({
+            credentialId: z.string().regex(/^[A-Za-z0-9_-]{16,1366}$/),
+            rpId: z.string().min(1).max(253),
+            rpName: str(200),
+            userHandle: z.string().regex(/^[A-Za-z0-9_-]{0,86}$/),
+            userName: str(500),
+            userDisplayName: str(500),
+            alg: z.literal(-7),
+            privateKey: z.string().regex(/^[A-Za-z0-9_-]{60,400}$/),
+            createdAt: z.string().max(40),
+          }),
+        )
+        .max(20)
+        .optional(),
     }),
   }),
   z.looseObject({
