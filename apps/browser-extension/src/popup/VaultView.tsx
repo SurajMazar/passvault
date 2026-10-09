@@ -129,7 +129,12 @@ function Header({ state }: { state: PopupState }) {
       <IconButton label="Open dashboard" size="sm" onClick={() => openDashboard(state.webUrl)}>
         <ExternalLink className="size-4" />
       </IconButton>
-      <IconButton label="Lock" size="sm" onClick={() => void call({ type: 'auth.lock' })}>
+      <IconButton
+        label="Lock"
+        size="sm"
+        // Close right away: the locked screen would otherwise offer Touch ID at once. Reopening asks.
+        onClick={() => void call({ type: 'auth.lock' }).finally(() => window.close())}
+      >
         <Lock className="size-4" />
       </IconButton>
     </header>
