@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { Button, IconButton, Input, cx } from './primitives';
@@ -56,7 +56,7 @@ export function Dialog(props: {
   if (!props.open) return null;
   const width = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-5xl' }[props.size ?? 'md'];
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 backdrop-blur-[2px] p-4 sm:pt-[8vh]" onMouseDown={(e) => dismissable && e.target === e.currentTarget && props.onClose()}>
+    <div className="pv-overlay-in fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 backdrop-blur-[2px] p-4 sm:pt-[8vh]" onMouseDown={(e) => dismissable && e.target === e.currentTarget && props.onClose()}>
       <div
         ref={ref}
         role="dialog"
@@ -64,7 +64,7 @@ export function Dialog(props: {
         aria-labelledby={titleId}
         aria-describedby={props.description ? descId : undefined}
         tabIndex={-1}
-        className={cx('pv-animate-in w-full rounded-2xl border border-border bg-surface shadow-[var(--shadow-pop)] outline-none', width)}
+        className={cx('pv-dialog-in w-full rounded-2xl border border-border bg-surface shadow-[var(--shadow-pop)] outline-none', width)}
       >
         <header className="flex items-start gap-3 px-6 pt-5 pb-4">
           <div className="flex-1 min-w-0">
@@ -179,7 +179,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {toasts.map((t) => {
             const I = icon[t.tone];
             return (
-              <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} className="pv-animate-in flex items-start gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-sm shadow-[var(--shadow-pop)]">
+              <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} className="pv-toast-in flex items-start gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-sm shadow-[var(--shadow-pop)]">
                 <I className={cx('mt-0.5 size-4 shrink-0', t.tone === 'success' && 'text-ok', t.tone === 'error' && 'text-danger', t.tone === 'warn' && 'text-warn', t.tone === 'info' && 'text-accent')} />
                 <div className="flex-1">{t.message}</div>
                 <button className="text-fg-subtle hover:text-fg" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>
@@ -213,24 +213,53 @@ export interface MenuItem {
 export function Menu({ trigger, items, align = 'right' }: { trigger: (props: { onClick: () => void; 'aria-expanded': boolean; 'aria-haspopup': 'menu' }) => ReactNode; items: MenuItem[]; align?: 'left' | 'right' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Fixed to the viewport (in a portal) so no scrolling or clipped container can cut it off;
+  // placed under the trigger (above it when there is no room) and kept 8px inside the window.
+  const [pos, setPos] = useState<{ left: number; top: number; origin: string } | null>(null);
   const visible = useMemo(() => items.filter((i) => !i.hidden), [items]);
+  useLayoutEffect(() => {
+    if (!open) return setPos(null);
+    const place = () => {
+      const t = ref.current?.getBoundingClientRect();
+      const m = menuRef.current;
+      if (!t || !m) return;
+      const w = m.offsetWidth;
+      const h = m.offsetHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = align === 'right' ? t.right - w : t.left;
+      left = Math.min(Math.max(8, left), vw - w - 8);
+      const below = t.bottom + 6;
+      const up = below + h > vh - 8 && t.top - 6 - h >= 8;
+      setPos({ left, top: up ? t.top - 6 - h : Math.min(below, Math.max(8, vh - h - 8)), origin: `${up ? 'bottom' : 'top'} ${align === 'right' ? 'right' : 'left'}` });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, align, visible.length]);
   useEffect(() => {
     if (!open) return;
+    const inside = (n: Node) => !!(ref.current?.contains(n) || menuRef.current?.contains(n));
     const onDoc = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      if (!inside(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
-        const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>('[role=menuitem]:not([disabled])') ?? [])];
+        const btns = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role=menuitem]:not([disabled])') ?? [])];
         const i = btns.indexOf(document.activeElement as HTMLButtonElement);
         btns[(i + (e.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length]?.focus();
       }
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
-    setTimeout(() => ref.current?.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus(), 0);
+    setTimeout(() => menuRef.current?.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus(), 0);
     return () => {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
@@ -239,29 +268,36 @@ export function Menu({ trigger, items, align = 'right' }: { trigger: (props: { o
   return (
     <div ref={ref} className="relative">
       {trigger({ onClick: () => setOpen((o) => !o), 'aria-expanded': open, 'aria-haspopup': 'menu' })}
-      {open && (
-        <div role="menu" className={cx('pv-animate-in absolute z-40 mt-1.5 min-w-52 rounded-xl border border-border bg-surface p-1.5 shadow-[var(--shadow-pop)]', align === 'right' ? 'right-0' : 'left-0')}>
-          {visible.map((it, i) => (
-            <button
-              key={i}
-              role="menuitem"
-              type="button"
-              disabled={it.disabled}
-              onClick={() => {
-                setOpen(false);
-                it.onSelect();
-              }}
-              className={cx(
-                'flex w-full items-center gap-2.5 rounded-lg px-2.5 h-9 text-left text-sm hover:bg-surface-3 focus:bg-surface-3 focus:outline-none disabled:opacity-40',
-                it.danger ? 'text-danger' : 'text-fg',
-              )}
-            >
-              {it.icon && <span className="size-4 shrink-0 text-fg-subtle [&>svg]:size-4">{it.icon}</span>}
-              {it.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            className={cx('fixed z-[70] min-w-52 max-w-[calc(100vw-16px)] rounded-xl border border-border bg-surface p-1.5 shadow-[var(--shadow-pop)]', pos ? 'pv-pop-in' : 'invisible')}
+            style={{ left: pos?.left ?? 0, top: pos?.top ?? 0, ['--pv-origin' as string]: pos?.origin }}
+          >
+            {visible.map((it, i) => (
+              <button
+                key={i}
+                role="menuitem"
+                type="button"
+                disabled={it.disabled}
+                onClick={() => {
+                  setOpen(false);
+                  it.onSelect();
+                }}
+                className={cx(
+                  'flex w-full items-center gap-2.5 rounded-lg px-2.5 h-9 text-left text-sm transition-colors hover:bg-surface-3 focus:bg-surface-3 focus:outline-none disabled:opacity-40',
+                  it.danger ? 'text-danger' : 'text-fg',
+                )}
+              >
+                {it.icon && <span className="size-4 shrink-0 text-fg-subtle [&>svg]:size-4">{it.icon}</span>}
+                <span className="truncate">{it.label}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

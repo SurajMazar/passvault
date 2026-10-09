@@ -50,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cx(
-        'inline-flex items-center justify-center font-medium whitespace-nowrap select-none transition-[background-color,border-color,color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-70',
+        'pv-press inline-flex items-center justify-center font-medium whitespace-nowrap select-none transition-[background-color,border-color,color,box-shadow,transform] duration-150 disabled:cursor-not-allowed disabled:opacity-70',
         variantClass[variant],
         sizeClass[size],
         className,
@@ -229,7 +229,7 @@ export function Switch(props: { checked: boolean; onChange: (v: boolean) => void
           props.checked ? 'bg-accent border-accent' : 'bg-bg-subtle border-border-strong',
         )}
       >
-        <span className={cx('absolute top-0.5 size-3.5 rounded-full bg-white shadow transition-transform', props.checked ? 'translate-x-4' : 'translate-x-0.5')} />
+        <span className={cx('absolute top-0.5 size-3.5 rounded-full bg-white shadow transition-transform duration-200 ease-[cubic-bezier(0.3,1.4,0.5,1)]', props.checked ? 'translate-x-4' : 'translate-x-0.5')} />
       </button>
       <label htmlFor={id} className="text-sm cursor-pointer">
         <span className="text-fg">{props.label}</span>

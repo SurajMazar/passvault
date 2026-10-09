@@ -92,7 +92,7 @@ let current: Promise<Runtime> = (async () => {
 const ports = new Map<chrome.runtime.Port, () => void>();
 
 /** Touch ID host calls made by the open popup on the worker's behalf (background/touch-id.ts). */
-const nativeCalls = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+const nativeCalls = new Map<number, { port: chrome.runtime.Port; resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 let nativeSeq = 0;
 function relayFromPopup(message: Record<string, unknown>): Promise<unknown> {
   const port = [...ports.keys()].at(-1);
@@ -104,6 +104,7 @@ function relayFromPopup(message: Record<string, unknown>): Promise<unknown> {
       reject(new Error('Touch ID timed out'));
     }, 120_000);
     nativeCalls.set(id, {
+      port,
       resolve: (v) => (clearTimeout(timer), resolve(v)),
       reject: (e) => (clearTimeout(timer), reject(e)),
     });
@@ -153,6 +154,12 @@ chrome.runtime.onConnect.addListener((port) => {
   let closed = false;
   port.onDisconnect.addListener(() => {
     closed = true;
+    // Touch ID calls this popup was relaying can no longer be answered.
+    for (const [id, call] of nativeCalls) {
+      if (call.port !== port) continue;
+      nativeCalls.delete(id);
+      call.reject(new Error('The PassVault popup closed.'));
+    }
     ports.get(port)?.();
     ports.delete(port);
   });

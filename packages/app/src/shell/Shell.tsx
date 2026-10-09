@@ -320,7 +320,10 @@ export function Shell() {
           ))}
         </div>
         <main className="min-h-0 flex-1 overflow-hidden" id="main">
-          {ui.nav === 'overview' ? <Overview /> : ui.nav === 'projects' ? <ProjectsView /> : ui.nav === 'settings' ? <SettingsView /> : extView ? extView.render() : <ItemsView />}
+          {/* keyed by section, so switching sections fades the new one in */}
+          <div key={ui.nav} className="pv-view-in h-full">
+            {ui.nav === 'overview' ? <Overview /> : ui.nav === 'projects' ? <ProjectsView /> : ui.nav === 'settings' ? <SettingsView /> : extView ? extView.render() : <ItemsView />}
+          </div>
         </main>
       </div>
 

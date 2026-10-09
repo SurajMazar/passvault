@@ -194,17 +194,18 @@ export function ItemsView() {
               {ui.query ? 'Search covers titles, usernames, hosts, tags, and variable names — never secret values.' : ui.nav === 'trash' ? 'Items you delete stay here until you empty the trash.' : 'Create an item to get started.'}
             </EmptyState>
           ) : (
-            items.map((it) => (
+            items.map((it, idx) => (
               <div
                 key={it.id}
                 id={`row-${it.id}`}
+                style={{ ['--i' as string]: idx }}
                 role="option"
                 aria-selected={it.id === ui.selectedId}
                 tabIndex={it.id === ui.selectedId || (!ui.selectedId && it === items[0]) ? 0 : -1}
                 onClick={() => ui.set({ selectedId: it.id })}
                 onKeyDown={(e) => e.key === 'Enter' && ui.set({ selectedId: it.id })}
                 className={cx(
-                  'group relative mx-2 my-0.5 flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 outline-none transition-colors',
+                  'pv-row-in group relative mx-2 my-0.5 flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 outline-none transition-colors',
                   it.id === ui.selectedId ? 'bg-accent-soft ring-1 ring-accent-line' : 'hover:bg-surface-2 focus-visible:bg-surface-2',
                 )}
               >
@@ -243,7 +244,9 @@ export function ItemsView() {
       </section>
       <section className={cx('min-w-0 flex-1 overflow-y-auto bg-bg pv-scroll', !selected && 'hidden lg:block')} aria-label="Item details">
         {selected ? (
-          <ItemDetail item={selected} onClose={() => ui.set({ selectedId: null })} />
+          <div key={selected.id} className="pv-view-in">
+            <ItemDetail item={selected} onClose={() => ui.set({ selectedId: null })} />
+          </div>
         ) : (
           <EmptyState title="Select an item" icon={<TypeIcon type={createType} size="lg" />}>
             Use ↑ ↓ to move through the list, <kbd>/</kbd> to search, <kbd>N</kbd> to create, and ⌘K for everything else.

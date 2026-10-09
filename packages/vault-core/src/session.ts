@@ -282,17 +282,35 @@ export class VaultSession {
     this.emit({ auth: { phase: 'signed_out' } });
   }
 
+  /** Last known answer of the biometric check, so locking never waits for it. */
+  private biometricHint = false;
+
+  /**
+   * Announces the locked phase at once — the keys are already gone, so nothing may still
+   * look unlocked — then refreshes whether biometric unlock is usable (that check can be
+   * slow, e.g. a native host) and updates the phase if the vault is still locked.
+   */
   private async toLocked() {
     const acc = this.account!;
-    let biometricAvailable = false;
-    if (this.platform.biometrics && this.store) {
-      const wrapped = await this.store.getMeta<string>(META_BIOMETRIC);
-      biometricAvailable = !!wrapped && (await this.platform.biometrics.status()).available;
-    }
-    this.emit({
-      auth: { phase: 'locked', email: acc.user.email, name: acc.user.name, biometricAvailable, hasSession: !!this.token },
-      user: acc.user,
+    const locked = (biometricAvailable: boolean) => ({
+      phase: 'locked' as const,
+      email: acc.user.email,
+      name: acc.user.name,
+      biometricAvailable,
+      hasSession: !!this.token,
     });
+    this.emit({ auth: locked(this.biometricHint), user: acc.user });
+    if (!this.platform.biometrics || !this.store) return;
+    let available = false;
+    try {
+      const wrapped = await this.store.getMeta<string>(META_BIOMETRIC);
+      available = !!wrapped && (await this.platform.biometrics.status()).available;
+    } catch {
+      available = false;
+    }
+    this.biometricHint = available;
+    const now = this.snapshot.auth;
+    if (now.phase === 'locked' && now.biometricAvailable !== available) this.emit({ auth: locked(available) });
   }
 
   get deviceInfo() {

@@ -78,7 +78,11 @@ export function createTouchIdAdapter(c: ChromeLike, scope: string | undefined, r
   return {
     async status() {
       try {
-        const r = await send({ op: 'status' });
+        // Asked whenever the vault locks: never let a stuck host or relay hold that up.
+        const r = await Promise.race([
+          send({ op: 'status' }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new TouchIdError('unavailable', 'Touch ID did not answer')), 5000)),
+        ]);
         return { available: !!r.available, reason: r.reason || undefined };
       } catch (e) {
         return { available: false, reason: e instanceof Error ? e.message : String(e) };

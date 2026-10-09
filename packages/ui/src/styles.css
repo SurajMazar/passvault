@@ -179,6 +179,86 @@
   animation: pv-fade-in 160ms ease-out;
 }
 
+/* ---- motion: short, eased, and off with Reduce motion (below) ---- */
+@keyframes pv-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pv-overlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pv-dialog {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pv-toast {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* menus and popovers grow from their trigger */
+.pv-pop-in {
+  animation: pv-pop 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: var(--pv-origin, top right);
+}
+.pv-overlay-in {
+  animation: pv-overlay 180ms ease-out;
+}
+.pv-dialog-in {
+  animation: pv-dialog 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pv-toast-in {
+  animation: pv-toast 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* a page or detail view that just appeared */
+.pv-view-in {
+  animation: pv-rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* list rows: a short stagger for the first rows (style="--i: n") */
+.pv-row-in {
+  animation: pv-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 18ms);
+}
+/* buttons give under the pointer */
+.pv-press {
+  transition-property: background-color, border-color, color, box-shadow, transform;
+}
+.pv-press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
