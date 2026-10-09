@@ -119,3 +119,96 @@ export function pvCaptureCredentials(): PageCaptureResult {
     foundPasswordField: !!pick,
   };
 }
+
+export interface PageCardFillResult {
+  code: 'filled' | 'origin_mismatch' | 'no_card_field' | 'not_top_frame';
+  /** which parts were filled: name, number, expiry, cvv */
+  filled: string[];
+}
+
+/**
+ * Fill ONE payment card into the checkout form of the top document, after the
+ * user clicked Fill in the popup. Uses the standard autocomplete tokens
+ * (cc-name, cc-number, cc-exp, cc-exp-month, cc-exp-year, cc-csc) and falls back
+ * to field names/labels. Card fields inside cross-origin iframes (hosted payment
+ * forms) are not reachable; the popup offers copy buttons for those.
+ * TOCTOU guard: does nothing unless `location.origin === expectedOrigin`.
+ */
+export function pvFillCard(expectedOrigin: string, card: { name: string; number: string; expMonth: string; expYear: string; cvv: string }): PageCardFillResult {
+  if (window.top !== window) return { code: 'not_top_frame', filled: [] };
+  if (location.origin !== expectedOrigin) return { code: 'origin_mismatch', filled: [] };
+
+  const usable = (el: HTMLInputElement | HTMLSelectElement): boolean => {
+    if (el.disabled || (el instanceof HTMLInputElement && (el.readOnly || el.type === 'hidden')) || el.hidden) return false;
+    for (let n: Element | null = el; n; n = n.parentElement) {
+      if ((n as HTMLElement).hidden) return false;
+      const cs = getComputedStyle(n);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse' || cs.opacity === '0') return false;
+    }
+    const r = el.getBoundingClientRect();
+    return r.width >= 2 && r.height >= 2 && r.right + window.scrollX > 0 && r.bottom + window.scrollY > 0;
+  };
+  const fields = Array.from(document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')).filter(usable);
+  const ac = (el: Element) => (el.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/);
+  const label = (el: HTMLInputElement | HTMLSelectElement) => {
+    const byFor = el.id ? Array.from(document.querySelectorAll('label')).find((l) => l.htmlFor === el.id)?.textContent : '';
+    return `${el.name} ${el.id} ${el.getAttribute('placeholder') || ''} ${el.getAttribute('aria-label') || ''} ${byFor || ''} ${el.closest('label')?.textContent || ''}`.toLowerCase();
+  };
+  const find = (token: string, re: RegExp | null) =>
+    fields.find((el) => ac(el).includes(token)) ??
+    (re ? fields.find((el) => !ac(el).some((t) => t.startsWith('cc-') && t !== token) && re.test(label(el))) : undefined);
+
+  const numberEl = find('cc-number', /card.?(number|no\b|num)|cc.?num|\bpan\b|kartennummer|numero.?de.?tarjeta/);
+  if (!numberEl) return { code: 'no_card_field', filled: [] };
+  const nameEl = find('cc-name', /name.?on.?card|card.?holder|cardholder|holder.?name/);
+  const expEl = find('cc-exp', /\bexp(iry|iration)?\b(?!.*(month|year))|mm.?\/.?yy|valid.?thru/);
+  const monthEl = find('cc-exp-month', /exp.*month|\bmm\b|month/);
+  const yearEl = find('cc-exp-year', /exp.*year|\byy(yy)?\b|year/);
+  const cvvEl = find('cc-csc', /cvv|cvc|csc|security.?code|card.?code|\bcid\b/);
+
+  const setValue = (el: HTMLInputElement | HTMLSelectElement, value: string) => {
+    el.focus({ preventScroll: true });
+    if (el instanceof HTMLSelectElement) {
+      const want = value.replace(/^0/, '');
+      const opt = Array.from(el.options).find(
+        (o) =>
+          o.value === value ||
+          o.value.replace(/^0/, '') === want ||
+          o.text.trim() === value ||
+          o.text.trim().replace(/^0/, '') === want ||
+          o.value === value.slice(-2),
+      );
+      if (!opt) return false;
+      el.value = opt.value;
+    } else {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (setter) setter.call(el, value);
+      else el.value = value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.blur();
+    return true;
+  };
+
+  const filled: string[] = [];
+  if (setValue(numberEl, card.number)) filled.push('number');
+  if (nameEl && card.name && setValue(nameEl, card.name)) filled.push('name');
+  if (card.expMonth && card.expYear) {
+    if (expEl && expEl !== monthEl) {
+      const hint = `${expEl.getAttribute('placeholder') || ''} ${expEl instanceof HTMLInputElement ? expEl.maxLength : ''}`;
+      const fourDigitYear = /yyyy/i.test(hint) || (expEl instanceof HTMLInputElement && expEl.maxLength >= 7);
+      const sep = /\s\/\s/.test(expEl.getAttribute('placeholder') || '') ? ' / ' : '/';
+      if (setValue(expEl, `${card.expMonth}${sep}${fourDigitYear ? card.expYear : card.expYear.slice(-2)}`)) filled.push('expiry');
+    } else {
+      const m = monthEl && setValue(monthEl, card.expMonth);
+      const yHint = yearEl ? `${yearEl.getAttribute('placeholder') || ''} ${yearEl instanceof HTMLInputElement ? yearEl.maxLength : ''}` : '';
+      const y =
+        yearEl &&
+        setValue(yearEl, yearEl instanceof HTMLInputElement && (/\byy\b/i.test(yHint) || yearEl.maxLength === 2) ? card.expYear.slice(-2) : card.expYear);
+      if (m || y) filled.push('expiry');
+    }
+  }
+  if (cvvEl && card.cvv && setValue(cvvEl, card.cvv)) filled.push('cvv');
+  return { code: 'filled', filled };
+}

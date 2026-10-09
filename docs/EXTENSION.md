@@ -409,3 +409,13 @@ Manual verification in Chrome for Testing (headless, `--load-extension=dist`):
   - killing the service worker, then listing again: it resumes from `chrome.storage.session`
   - lock: requests return `locked`, `chrome.storage.session` is empty, and `chrome.storage.local` holds only `pv.pref.deviceId` and `pv.pref.lastEmail`
 - The popup renders in light and dark mode.
+
+## Payment cards
+
+The popup's **Cards** tab lists payment cards. **Fill** (one click, popup only)
+injects `pvFillCard` into the active tab's top frame: HTTPS pages only, origin
+re-checked in the page, fields found by the `cc-*` autocomplete tokens with name and
+label fallbacks, month/year dropdowns supported. Card forms inside cross-origin
+iframes (hosted payment fields) cannot be reached; the copy buttons (number, expiry,
+CVV, name) cover those, and copied numbers and codes are cleared from the clipboard
+like passwords.

@@ -1,6 +1,7 @@
 import { entries, parseEnv } from '@passvault/env-parser';
 import type { ItemPayload, ItemType } from '@passvault/types';
 import { itemStatus, type ItemStatusFilter } from './items';
+import { cardBrand, cardLast4 } from './cards';
 
 /**
  * Local search over decrypted, NON-SECRET fields. Secret values (passwords,
@@ -37,6 +38,10 @@ export function searchableText(p: ItemPayload): string {
     }
     case 'secure_note':
       break; // note body is secret content; only its title/metadata are searchable
+    case 'payment_card':
+      // brand and last four digits only: the full number, CVV and PIN are secret
+      parts.push(p.fields.cardholder, cardBrand(p.fields.number), cardLast4(p.fields.number));
+      break;
   }
   return parts.join('\n').toLowerCase();
 }

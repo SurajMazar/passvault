@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { ITEM_TYPE_LABELS, URL_MATCH_LABELS, isProductionEnvironment, type ItemPayload } from '@passvault/types';
 import { Badge, Banner, Button, Card, EnvBadge, FieldRow, IconButton, Menu, TypeIcon, cx, useConfirm, useToast } from '@passvault/ui';
-import { safeHost, type DecryptedItem } from '@passvault/vault-core';
+import { safeHost, type DecryptedItem, cardBrand, cardExpiresAt, cardExpiryLabel } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { EnvFileView } from '../env/EnvFileView';
 
@@ -135,6 +135,24 @@ function Fields({ item }: { item: DecryptedItem }) {
     case 'secure_note':
       rows.push(<FieldRow key="n" label="Note" value={p.fields.content} secret multiline onCopy={(v) => copy(v)} />);
       break;
+    case 'payment_card': {
+      const exp = cardExpiresAt(p.fields)?.getTime() ?? null;
+      rows.push(
+        <FieldRow key="h" label="Name on card" value={p.fields.cardholder} onCopy={(v) => copy(v, false)} />,
+        <FieldRow key="n" label={`${cardBrand(p.fields.number)} number`} value={p.fields.number} secret mono onCopy={(v) => copy(v)} />,
+        <FieldRow
+          key="x"
+          label="Expires"
+          value={cardExpiryLabel(p.fields)}
+          mono
+          onCopy={(v) => copy(v, false)}
+          extra={exp !== null ? exp < Date.now() ? <Badge tone="danger" className="ml-2">Expired</Badge> : exp - Date.now() < 60 * 86400_000 ? <Badge tone="warn" className="ml-2">Expires soon</Badge> : null : null}
+        />,
+        <FieldRow key="c" label="Security code" value={p.fields.cvv} secret mono onCopy={(v) => copy(v)} />,
+        <FieldRow key="pin" label="PIN" value={p.fields.pin} secret mono onCopy={(v) => copy(v)} />,
+      );
+      break;
+    }
     case 'env_file':
       break;
   }

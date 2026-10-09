@@ -16,7 +16,7 @@ import {
 import { generatePassword } from '@passvault/crypto';
 import { isValidHost, isValidSshUsername, itemPayloadSchema } from '@passvault/validation';
 import { Banner, Button, Dialog, Field, IconButton, Input, SecretInput, Select, StrengthMeter, TagInput, TextArea, useToast } from '@passvault/ui';
-import { newItem, passwordStrength, IDENTIFIER_MAX } from '@passvault/vault-core';
+import { newItem, passwordStrength, IDENTIFIER_MAX, cardBrand, cardDigits, luhnValid } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { sshPublicKeyInfo } from './ssh-keys';
 
@@ -326,6 +326,8 @@ export function ItemEditor() {
           </>
         )}
 
+        {draft.type === 'payment_card' && <CardFields f={f} setF={setF} err={err} />}
+
         {draft.type === 'secure_note' && (
           <Field label="Note" hint="Plain text. Shown as text only — HTML and scripts are never rendered.">
             {(id, d) => <TextArea id={id} aria-describedby={d} rows={10} value={f.content as string} onChange={(e) => setF({ content: e.target.value })} />}
@@ -494,6 +496,75 @@ function SshKeyFields({ f, setF, errors, hasNative }: { f: Record<string, unknow
         <Field label="Algorithm">{(id) => <Input id={id} readOnly value={f.algorithm as string} />}</Field>
       </div>
       <Field label="Comment">{(id) => <Input id={id} value={(f.comment as string) ?? ''} onChange={(e) => setF({ comment: e.target.value || undefined })} />}</Field>
+    </>
+  );
+}
+
+/** Payment card: number stored as digits, shown in groups of four; brand and checksum are hints. */
+function CardFields({ f, setF, err }: { f: Record<string, unknown>; setF: (patch: Record<string, unknown>) => void; err: (path: string) => string | null }) {
+  const number = String(f.number ?? '');
+  const brand = cardBrand(number);
+  const grouped = brand === 'American Express' ? number.replace(/^(\d{0,4})(\d{0,6})(\d{0,5}).*/, (_, a, b, c) => [a, b, c].filter(Boolean).join(' ')) : number.replace(/(\d{4})(?=\d)/g, '$1 ');
+  const year = new Date().getFullYear();
+  const years = Array.from({ length: 16 }, (_, i) => String(year - 1 + i));
+  const expYear = String(f.expYear ?? '');
+  if (expYear && !years.includes(expYear)) years.unshift(expYear);
+  return (
+    <>
+      <Field label="Name on card">{(id) => <Input id={id} value={String(f.cardholder ?? '')} onChange={(e) => setF({ cardholder: e.target.value })} autoComplete="off" />}</Field>
+      <Field
+        label="Card number"
+        error={err('number')}
+        hint={number.length >= 12 && !luhnValid(number) ? 'This number does not pass the card checksum — check for a typo.' : number ? brand : 'Digits only; spaces are added for you.'}
+      >
+        {(id, d) => (
+          <Input
+            id={id}
+            aria-describedby={d}
+            inputMode="numeric"
+            autoComplete="off"
+            className="font-mono tracking-wider"
+            value={grouped}
+            maxLength={23}
+            onChange={(e) => setF({ number: cardDigits(e.target.value).slice(0, 19) })}
+            placeholder="1234 5678 9012 3456"
+          />
+        )}
+      </Field>
+      <Row>
+        <Field label="Expiry month" error={err('expMonth')}>
+          {(id) => (
+            <Select id={id} value={String(f.expMonth ?? '')} onChange={(e) => setF({ expMonth: e.target.value })}>
+              <option value="">—</option>
+              {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Expiry year" error={err('expYear')}>
+          {(id) => (
+            <Select id={id} value={expYear} onChange={(e) => setF({ expYear: e.target.value })}>
+              <option value="">—</option>
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      </Row>
+      <Row>
+        <Field label="Security code (CVV)" error={err('cvv')}>
+          {(id) => <SecretInput id={id} value={String(f.cvv ?? '')} onChange={(v) => setF({ cvv: cardDigits(v).slice(0, 4) })} />}
+        </Field>
+        <Field label="PIN" error={err('pin')}>
+          {(id) => <SecretInput id={id} value={String(f.pin ?? '')} onChange={(v) => setF({ pin: v.slice(0, 32) })} />}
+        </Field>
+      </Row>
     </>
   );
 }

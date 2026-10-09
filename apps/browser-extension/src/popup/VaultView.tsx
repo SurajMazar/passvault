@@ -17,7 +17,7 @@ import {
   useConfirm,
   useToast,
 } from '@passvault/ui';
-import type { ItemDetail, ItemSummary, LoginMatch, MatchesResponse, PopupState } from '../shared/protocol';
+import type { CardSummary, ItemDetail, ItemSummary, LoginMatch, MatchesResponse, PopupState } from '../shared/protocol';
 import { openDashboard } from './AuthViews';
 import { AutoSaveSettings } from './AutoSaveSettings';
 import { ServerSettings } from './ServerSwitch';
@@ -30,7 +30,7 @@ type Route = { view: 'list' } | { view: 'detail'; id: string } | { view: 'save' 
 
 export function VaultView({ state }: { state: PopupState }) {
   // Back on Settings after the popup reloaded itself to finish turning on Touch ID.
-  const [tab, setTab] = useState<'vault' | 'generator' | 'settings'>(() => (touchIdContinuing() ? 'settings' : 'vault'));
+  const [tab, setTab] = useState<'vault' | 'cards' | 'generator' | 'settings'>(() => (touchIdContinuing() ? 'settings' : 'vault'));
   const [route, setRoute] = useState<Route>({ view: 'list' });
   const [tabId, setTabId] = useState<number | null>(null);
   useEffect(() => {
@@ -49,6 +49,7 @@ export function VaultView({ state }: { state: PopupState }) {
             onChange={setTab}
             tabs={[
               { id: 'vault', label: 'Vault' },
+              { id: 'cards', label: 'Cards' },
               { id: 'generator', label: 'Generator' },
               { id: 'settings', label: 'Settings' },
             ]}
@@ -56,7 +57,9 @@ export function VaultView({ state }: { state: PopupState }) {
         </div>
       )}
       <div className="flex-1 overflow-y-auto pv-scroll">
-        {tab === 'generator' && route.view === 'list' ? (
+        {tab === 'cards' && route.view === 'list' ? (
+          <CardList tabId={tabId} dataVersion={state.dataVersion} />
+        ) : tab === 'generator' && route.view === 'list' ? (
           <Generator />
         ) : tab === 'settings' && route.view === 'list' ? (
           <>
@@ -289,7 +292,9 @@ function ItemList({ state, tabId, onOpen, onSave }: { state: PopupState; tabId: 
                   <TypeIcon type={it.type} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
-                      <span title={it.title} className="truncate text-sm">{it.title}</span>
+                      <span title={it.title} className="truncate text-sm">
+                        {it.title}
+                      </span>
                       <IdentifierTag text={it.identifier} />
                     </span>
                     <span className="block truncate text-[11px] text-fg-subtle">{it.subtitle}</span>
@@ -312,7 +317,9 @@ function MatchRow({ m, onOpen, onFill, onCopy }: { m: LoginMatch; onOpen: () => 
         <TypeIcon type="login" size="sm" />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <span title={m.title} className="truncate text-sm font-medium">{m.title}</span>
+            <span title={m.title} className="truncate text-sm font-medium">
+              {m.title}
+            </span>
             <IdentifierTag text={m.identifier} />
           </span>
           <span className="block truncate text-[11px] text-fg-subtle">
@@ -400,7 +407,11 @@ function typeHint(item: ItemDetail): ReactNode {
 /** The item's short identifier as a small tag next to its title. */
 function IdentifierTag({ text }: { text: string }) {
   if (!text) return null;
-  return <span title={text} className="max-w-[45%] shrink-0 truncate rounded bg-surface-3 px-1.5 py-px text-[10px] text-fg-muted">{text}</span>;
+  return (
+    <span title={text} className="max-w-[45%] shrink-0 truncate rounded bg-surface-3 px-1.5 py-px text-[10px] text-fg-muted">
+      {text}
+    </span>
+  );
 }
 
 function SearchBox({ value, onChange, placeholder, autoFocus }: { value: string; onChange: (v: string) => void; placeholder: string; autoFocus?: boolean }) {
@@ -416,5 +427,107 @@ function SearchBox({ value, onChange, placeholder, autoFocus }: { value: string;
         aria-label={placeholder.replace('…', '')}
       />
     </label>
+  );
+}
+
+/** Payment cards: fill the checkout form on this tab, or copy a part of the card. */
+function CardList({ tabId, dataVersion }: { tabId: number | null; dataVersion: number }) {
+  const toast = useToast();
+  const copy = useCopy();
+  const [cards, setCards] = useState<CardSummary[] | null>(null);
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void call({ type: 'cards.list' })
+      .then((r) => setCards(r.cards))
+      .catch((e) => setError(errorText(e)));
+  }, [dataVersion]);
+  const q = query.trim().toLowerCase();
+  const shown = (cards ?? []).filter((c) => !q || [c.title, c.identifier, c.brand, c.last4].some((x) => x.toLowerCase().includes(q)));
+  const copyPart = async (id: string, field: 'number' | 'expiry' | 'cvv' | 'cardholder') => {
+    try {
+      const { value } = await call({ type: 'card.secret', id, field });
+      if (!value) return toast('That part of the card is empty.', 'warn');
+      await copy(value, field === 'number' || field === 'cvv');
+    } catch (e) {
+      toast(errorText(e), 'error');
+    }
+  };
+  const fillCard = async (id: string) => {
+    if (tabId === null) return;
+    try {
+      const r = await call({ type: 'card.fill', tabId, itemId: id });
+      if (r.status === 'filled') {
+        toast(r.filled.length ? `Filled the ${r.filled.join(', ')}.` : 'Found the form, but nothing could be filled.', r.filled.length ? 'success' : 'warn');
+        if (r.filled.length) window.close();
+      } else toast(r.message, 'warn');
+    } catch (e) {
+      toast(errorText(e), 'error');
+    }
+  };
+  return (
+    <div className="flex flex-col gap-3 p-3">
+      {error && <Banner tone="danger">{error}</Banner>}
+      {(cards?.length ?? 0) > 2 && <SearchBox value={query} onChange={setQuery} placeholder="Search cards…" autoFocus />}
+      {!cards ? (
+        <Spinner />
+      ) : shown.length === 0 ? (
+        <EmptyState title={q ? 'No matching cards' : 'No cards yet'}>
+          {q ? 'Search covers names, identifiers, brands and the last four digits.' : 'Add a payment card in PassVault (dashboard or Mac app).'}
+        </EmptyState>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {shown.map((c) => (
+            <li key={c.id} className="rounded-lg border border-border bg-surface px-2.5 py-2">
+              <div className="flex items-center gap-2">
+                <TypeIcon type="payment_card" size="sm" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span title={c.title} className="truncate text-sm font-medium">
+                      {c.title}
+                    </span>
+                    <IdentifierTag text={c.identifier} />
+                  </span>
+                  <span className="block truncate text-[11px] text-fg-subtle">
+                    {c.brand} •••• {c.last4}
+                    {c.expiry && (
+                      <span className={c.expired ? 'ml-1 text-danger' : 'ml-1'}>
+                        · {c.expired ? 'expired' : 'exp'} {c.expiry}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<LogIn className="size-3.5" />}
+                  disabled={tabId === null || c.expired}
+                  onClick={() => void fillCard(c.id)}
+                >
+                  Fill
+                </Button>
+              </div>
+              <div className="mt-1.5 flex gap-1 pl-7">
+                <Button size="sm" variant="ghost" icon={<Copy className="size-3" />} onClick={() => void copyPart(c.id, 'number')}>
+                  Number
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void copyPart(c.id, 'expiry')}>
+                  Expiry
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void copyPart(c.id, 'cvv')}>
+                  CVV
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void copyPart(c.id, 'cardholder')}>
+                  Name
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-[11px] text-fg-subtle">
+        Fill works on secure (https) checkout pages. Payment forms embedded from another site can’t be reached — use the copy buttons there.
+      </p>
+    </div>
   );
 }

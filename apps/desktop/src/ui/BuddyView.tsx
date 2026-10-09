@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
-import { Copy, Dices, Eye, EyeOff, Fingerprint, KeyRound, Lock, Maximize2, Minus, Plug, Send, Server, StickyNote, Terminal, Upload, X } from 'lucide-react';
+import { Copy, CreditCard, Dices, Eye, EyeOff, Fingerprint, KeyRound, Lock, Maximize2, Minus, Plug, Send, Server, StickyNote, Terminal, Upload, X } from 'lucide-react';
 import { generatePassphrase, generatePassword } from '@passvault/crypto';
 import { ITEM_TYPE_LABELS, type ItemPayload } from '@passvault/types';
 import { Badge, Banner, Button, Field, Input, TextArea, cx } from '@passvault/ui';
-import { computeInsights, filterItems, matchLogin, newItem, type DecryptedItem, type SessionSnapshot, type VaultSession, itemIdentifier } from '@passvault/vault-core';
+import { computeInsights, filterItems, matchLogin, newItem, type DecryptedItem, type SessionSnapshot, type VaultSession, itemIdentifier, cardExpiryLabel } from '@passvault/vault-core';
 import type { MenuBar } from '../shell/menu-bar';
 import { formatShortcut } from '../shell/shortcut';
 import { AVATARS, Avatar, GREETING, RING, avatarFromFile, type AvatarChoice, type Reaction } from './avatars';
@@ -56,7 +56,7 @@ const subtitle = (it: DecryptedItem): string => {
   }
 };
 
-const ICON: Partial<Record<ItemPayload['type'], typeof KeyRound>> = { login: KeyRound, ssh_connection: Server, ssh_key: Terminal, env_file: Terminal, secure_note: StickyNote };
+const ICON: Partial<Record<ItemPayload['type'], typeof KeyRound>> = { login: KeyRound, ssh_connection: Server, ssh_key: Terminal, env_file: Terminal, secure_note: StickyNote, payment_card: CreditCard };
 
 function useSnapshot(session: VaultSession): SessionSnapshot {
   return useSyncExternalStore(
@@ -504,6 +504,10 @@ function Find({ snap, actions, flash, initialQuery = '' }: { snap: SessionSnapsh
               );
               acts.push(<Act key="e" label="Copy the whole file" onClick={() => copySecret('All variables', p.fields.content)} icon={<Copy className="size-3" />} text="All" />);
             }
+          } else if (p.type === 'payment_card') {
+            if (p.fields.number) acts.push(<Act key="n" label="Copy the card number" onClick={() => copySecret('Card number', p.fields.number)} icon={<Copy className="size-3" />} text="Number" />);
+            if (cardExpiryLabel(p.fields)) acts.push(<Act key="x" label="Copy the expiry date" onClick={() => copyText('Expiry', cardExpiryLabel(p.fields))} icon={<Copy className="size-3" />} text="Exp" />);
+            if (p.fields.cvv) acts.push(<Act key="c" label="Copy the security code" onClick={() => copySecret('Security code', p.fields.cvv)} icon={<KeyRound className="size-3" />} text="CVV" />);
           } else if (p.type === 'secure_note') {
             const body = p.fields.content ?? '';
             if (body) acts.push(<Act key="n" label="Copy note" onClick={() => copySecret('Note', body)} icon={<Copy className="size-3" />} text="Copy" />);

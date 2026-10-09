@@ -2,6 +2,7 @@ import { ZxcvbnFactory } from '@zxcvbn-ts/core';
 import * as common from '@zxcvbn-ts/language-common';
 import * as en from '@zxcvbn-ts/language-en';
 import type { ItemPayload } from '@passvault/types';
+import { cardExpiresAt } from './cards';
 
 let factory: ZxcvbnFactory | null = null;
 function estimator(): ZxcvbnFactory {
@@ -84,6 +85,12 @@ export function computeInsights(items: ItemRef[], now = new Date()): SecurityIns
     if (payload.type === 'api_credential' && payload.fields.expiresAt) {
       const exp = Date.parse(`${payload.fields.expiresAt}T00:00:00Z`);
       if (exp - now.getTime() < 30 * 24 * 3600 * 1000) expiringSoon.push({ id, expiresAt: payload.fields.expiresAt, expired: exp < now.getTime() });
+    }
+    if (payload.type === 'payment_card') {
+      const end = cardExpiresAt(payload.fields);
+      if (end && end.getTime() - now.getTime() < 60 * 24 * 3600 * 1000) {
+        expiringSoon.push({ id, expiresAt: end.toISOString().slice(0, 10), expired: end.getTime() < now.getTime() });
+      }
     }
   }
   const reused = [...byPassword.values()].filter((s) => s.size > 1).map((s) => ({ ids: [...s] }));

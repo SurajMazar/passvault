@@ -53,6 +53,9 @@ export const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('vault.meta') }).strict(),
   z.object({ type: z.literal('item.get'), id }).strict(),
   z.object({ type: z.literal('item.secret'), id, field: z.enum(['username', 'password']) }).strict(),
+  z.object({ type: z.literal('cards.list') }).strict(),
+  z.object({ type: z.literal('card.secret'), id, field: z.enum(['cardholder', 'number', 'expiry', 'cvv']) }).strict(),
+  z.object({ type: z.literal('card.fill'), tabId, itemId: id }).strict(),
   z.object({ type: z.literal('autofill.fill'), tabId, itemId: id, confirmInsecure: z.boolean() }).strict(),
   z.object({ type: z.literal('autofill.capture'), tabId }).strict(),
   z
@@ -175,6 +178,15 @@ export interface ItemSummary {
   readOnly: boolean;
 }
 
+export interface CardSummary extends ItemSummary {
+  brand: string;
+  last4: string;
+  expiry: string;
+  expired: boolean;
+}
+
+export type CardFillResponse = { status: 'filled'; filled: string[] } | { status: 'refused'; message: string };
+
 export interface LoginMatch extends ItemSummary {
   username: string;
   hasPassword: boolean;
@@ -280,6 +292,9 @@ export interface ResponseMap {
   'vault.meta': MetaResponse;
   'item.get': ItemDetail;
   'item.secret': { value: string };
+  'cards.list': { cards: CardSummary[] };
+  'card.secret': { value: string };
+  'card.fill': CardFillResponse;
   'autofill.fill': FillResponse;
   'autofill.capture': CaptureResponse;
   'item.saveLogin': { id: string };

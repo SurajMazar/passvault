@@ -11,6 +11,7 @@ export const ITEM_TYPES = [
   'api_credential',
   'env_file',
   'secure_note',
+  'payment_card',
 ] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
@@ -22,6 +23,7 @@ export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
   api_credential: 'API credential',
   env_file: 'Environment file',
   secure_note: 'Secure note',
+  payment_card: 'Payment card',
 };
 
 export const STANDARD_ENVIRONMENTS = ['development', 'staging', 'production'] as const;
@@ -169,6 +171,19 @@ export interface SecureNoteFields {
   content: string;
 }
 
+export interface PaymentCardFields {
+  cardholder: string;
+  /** Digits only (spaces are removed when saving). */
+  number: string;
+  /** "01".."12", or "" */
+  expMonth: string;
+  /** four digits, or "" */
+  expYear: string;
+  /** security code (CVV/CVC) */
+  cvv: string;
+  pin: string;
+}
+
 export interface ItemFieldsByType {
   login: LoginFields;
   ssh_connection: SshConnectionFields;
@@ -177,6 +192,7 @@ export interface ItemFieldsByType {
   api_credential: ApiCredentialFields;
   env_file: EnvFileFields;
   secure_note: SecureNoteFields;
+  payment_card: PaymentCardFields;
 }
 
 export interface ItemCommon {
@@ -250,4 +266,5 @@ export const SECRET_FIELDS: { [K in ItemType]: Array<keyof ItemFieldsByType[K]> 
   api_credential: ['token', 'apiKey', 'clientSecret', 'password'],
   env_file: ['content'],
   secure_note: ['content'],
+  payment_card: ['number', 'cvv', 'pin'],
 };

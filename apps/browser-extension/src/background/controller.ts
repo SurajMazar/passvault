@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ItemPayload } from '@passvault/types';
 import {
   generatePassphrase,
   generatePassword,
@@ -7,6 +8,10 @@ import {
   wipe,
 } from '@passvault/crypto';
 import {
+  cardBrand,
+  cardExpiresAt,
+  cardExpiryLabel,
+  cardLast4,
   filterItems,
   matchLogin,
   newItem,
@@ -22,6 +27,7 @@ import {
   UNPRIVILEGED,
   requestSchema,
   type CaptureResponse,
+  type CardFillResponse,
   type ErrorCode,
   type FillResponse,
   type LoginMatch,
@@ -33,7 +39,7 @@ import {
   type Result,
   type TabInfo,
 } from '../shared/protocol';
-import { pvCaptureCredentials, pvFillCredentials, type PageFillResult } from '../inject/page-functions';
+import { pvCaptureCredentials, pvFillCard, pvFillCredentials, type PageFillResult } from '../inject/page-functions';
 import { evaluateFill } from './autofill';
 import type { ChromeLike, SenderLike } from './chrome-api';
 import { itemDetail, summarize } from './detail';
@@ -112,6 +118,9 @@ const LOCKED_TYPES = new Set<Request['type']>([
   'vault.meta',
   'item.get',
   'item.secret',
+  'cards.list',
+  'card.secret',
+  'card.fill',
   'autofill.fill',
   'autofill.capture',
   'item.saveLogin',
@@ -127,6 +136,10 @@ const captureResultSchema = z.object({
   username: z.string().max(500),
   password: z.string().max(4096),
   foundPasswordField: z.boolean(),
+});
+const cardFillResultSchema = z.object({
+  code: z.enum(['filled', 'origin_mismatch', 'no_card_field', 'not_top_frame']),
+  filled: z.array(z.enum(['name', 'number', 'expiry', 'cvv'])).max(4),
 });
 const fillResultSchema = z.object({
   code: z.enum(['filled', 'origin_mismatch', 'no_password_field', 'not_top_frame']),
@@ -527,6 +540,23 @@ export class BackgroundController {
         if (it.payload.type !== 'login') throw new ControllerError('refused', 'Quick copy is only available for logins.');
         return { value: req.field === 'username' ? it.payload.fields.username : it.payload.fields.password } satisfies ResponseMap['item.secret'];
       }
+      case 'cards.list': {
+        const cards = filterItems(s.getSnapshot().items, { status: 'active', types: ['payment_card'] }).map((it) => {
+          const p = it.payload as ItemPayload<'payment_card'>;
+          const end = cardExpiresAt(p.fields);
+          return { ...summarize(it), brand: cardBrand(p.fields.number), last4: cardLast4(p.fields.number), expiry: cardExpiryLabel(p.fields), expired: !!end && end.getTime() < Date.now() };
+        });
+        return { cards } satisfies ResponseMap['cards.list'];
+      }
+      case 'card.secret': {
+        const it = this.item(req.id);
+        if (it.payload.type !== 'payment_card') throw new ControllerError('refused', 'Not a payment card.');
+        const f = it.payload.fields;
+        const value = req.field === 'expiry' ? cardExpiryLabel(f) : f[req.field];
+        return { value } satisfies ResponseMap['card.secret'];
+      }
+      case 'card.fill':
+        return this.fillCard(req.tabId, req.itemId);
       case 'autofill.fill':
         return this.fill(req.tabId, req.itemId, req.confirmInsecure);
       case 'autofill.capture':
@@ -699,6 +729,37 @@ export class BackgroundController {
       case 'no_password_field':
         return { status: 'refused', reason: 'no_password_field', message: 'No visible password field on this page. Use copy instead.' };
     }
+  }
+
+  /**
+   * Fill a payment card into the active tab's checkout form, after a click in the popup.
+   * HTTPS only (or a local development host), top frame only, origin re-checked in the page.
+   */
+  private async fillCard(tabId: number, itemId: string): Promise<CardFillResponse> {
+    const it = this.session.getSnapshot().items.find((i) => i.id === itemId);
+    if (!it || it.payload.type !== 'payment_card' || it.payload.trashedAt) return { status: 'refused', message: 'That card is not in your vault.' };
+    const url = await this.tabUrl(tabId);
+    const info = this.tabInfo(url);
+    if (!url || !info.origin || !info.eligible) return { status: 'refused', message: info.reason ?? 'PassVault cannot fill this page.' };
+    if (info.insecure) return { status: 'refused', message: 'Card details are only filled into secure (https) pages.' };
+    const f = it.payload.fields;
+    let results;
+    try {
+      results = await this.c.scripting.executeScript({
+        target: { tabId, frameIds: [0] },
+        func: pvFillCard,
+        args: [info.origin, { name: f.cardholder, number: f.number, expMonth: f.expMonth, expYear: f.expYear, cvv: f.cvv }],
+      });
+    } catch {
+      return { status: 'refused', message: 'PassVault could not access this page.' };
+    }
+    const r = cardFillResultSchema.safeParse(results.find((x) => x.frameId === 0)?.result);
+    if (!r.success) return { status: 'refused', message: 'PassVault could not fill this page.' };
+    if (r.data.code === 'origin_mismatch') return { status: 'refused', message: 'The page changed while filling. Try again.' };
+    if (r.data.code !== 'filled')
+      return { status: 'refused', message: 'No card form found on this page. If the payment form is embedded from another site, use the copy buttons.' };
+    this.log('card filled');
+    return { status: 'filled', filled: r.data.filled };
   }
 
   private async capture(tabId: number): Promise<CaptureResponse> {

@@ -1,5 +1,6 @@
 export * from './platform';
 export * from './items';
+export * from './cards';
 export * from './url-match';
 export * from './insights';
 export * from './search';

@@ -104,3 +104,17 @@ describe('payload forward compatibility', () => {
     expect(itemPayloadSchema.safeParse({ v: 1, type: 'login', title: '', fields: {} }).success).toBe(false);
   });
 });
+
+describe('payment card payloads', () => {
+  const base = { v: 1, type: 'payment_card', title: 'Visa', description: '', notes: '', folder: '', tags: [], favorite: false, archived: false, trashedAt: null, customFields: [] };
+  it('accepts digits-only numbers and valid expiry', () => {
+    const fields = { cardholder: 'A', number: '4242424242424242', expMonth: '07', expYear: '2031', cvv: '123', pin: '' };
+    expect(itemPayloadSchema.safeParse({ ...base, fields }).success).toBe(true);
+  });
+  it('rejects malformed card parts', () => {
+    const ok = { cardholder: '', number: '', expMonth: '', expYear: '', cvv: '', pin: '' };
+    for (const bad of [{ number: '4242 4242' }, { expMonth: '13' }, { expYear: '31' }, { cvv: '12345' }]) {
+      expect(itemPayloadSchema.safeParse({ ...base, fields: { ...ok, ...bad } }).success).toBe(false);
+    }
+  });
+});

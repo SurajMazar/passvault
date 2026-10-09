@@ -178,6 +178,18 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
     type: z.literal('secure_note'),
     fields: z.looseObject({ content: secret(1_000_000) }),
   }),
+  z.looseObject({
+    ...common,
+    type: z.literal('payment_card'),
+    fields: z.looseObject({
+      cardholder: str(200),
+      number: z.string().regex(/^\d{0,19}$/, 'card number must be up to 19 digits'),
+      expMonth: z.string().regex(/^(|0[1-9]|1[0-2])$/, 'expiry month must be 01-12'),
+      expYear: z.string().regex(/^(|\d{4})$/, 'expiry year must be four digits'),
+      cvv: z.string().regex(/^\d{0,4}$/, 'security code must be 3 or 4 digits'),
+      pin: secret(32),
+    }),
+  }),
 ]) satisfies z.ZodType<ItemPayload>;
 
 export const projectPayloadSchema = z.looseObject({

@@ -6,6 +6,7 @@ import {
   type ItemType,
   type ProjectPayload,
 } from '@passvault/types';
+import { cardBrand, cardExpiryLabel, maskCard } from './cards';
 
 export function emptyFields<T extends ItemType>(type: T): ItemFieldsByType[T] {
   const f: { [K in ItemType]: ItemFieldsByType[K] } = {
@@ -16,6 +17,7 @@ export function emptyFields<T extends ItemType>(type: T): ItemFieldsByType[T] {
     api_credential: { service: '', kind: 'token' },
     env_file: { filename: '.env', content: '', variableNotes: {} },
     secure_note: { content: '' },
+    payment_card: { cardholder: '', number: '', expMonth: '', expYear: '', cvv: '', pin: '' },
   };
   return structuredClone(f[type]);
 }
@@ -89,6 +91,8 @@ export function itemSubtitle(p: ItemPayload): string {
       return p.fields.filename;
     case 'secure_note':
       return 'Secure note';
+    case 'payment_card':
+      return [`${cardBrand(p.fields.number)} ${maskCard(p.fields.number)}`.trim(), cardExpiryLabel(p.fields) && `exp ${cardExpiryLabel(p.fields)}`].filter(Boolean).join(' · ');
   }
 }
 

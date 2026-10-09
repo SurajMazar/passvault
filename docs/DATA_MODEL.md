@@ -97,3 +97,12 @@ still unknown to older clients — prefer additive fields. API requests stay str
 The short **identifier** shown next to an item's title is the payload's
 `description` (first line, `IDENTIFIER_MAX` = 60 characters in editors), so it needed
 no schema change.
+
+## Payment cards (`payment_card`, 0.1.18)
+
+Fields: `cardholder`, `number` (digits only, up to 19), `expMonth` (`01`–`12`),
+`expYear` (four digits), `cvv` (up to 4 digits), `pin`. `number`, `cvv` and `pin` are
+secret fields. Lists and search see only the brand, the last four digits and the
+expiry (`vault-core/src/cards.ts`); expired and soon-expiring cards (60 days) appear
+in the health overview. Versions before 0.1.18 do not know the type and list cards
+as "created by a newer client".
