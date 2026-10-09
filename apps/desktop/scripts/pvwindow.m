@@ -117,6 +117,9 @@ static PVBuddyPanel *PVPanel(void) {
     gPanel.backgroundColor = NSColor.clearColor;
     gPanel.hasShadow = NO; // the buddy draws its own rounded shadow
     gPanel.releasedWhenClosed = NO;
+    // No show/hide animation: AppKit runs it off the main thread as a visually atomic change,
+    // which made a concurrent setStyleMask: on the app window throw (and abort the app).
+    gPanel.animationBehavior = NSWindowAnimationBehaviorNone;
     gPanel.movableByWindowBackground = NO;
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowDidMoveNotification
                                                       object:gPanel
@@ -185,6 +188,7 @@ static void PVEnterBuddy(NSWindow *w) {
     // AppKit can still bring the stand-in forward without -orderWindow:relativeTo: (app
     // activation, Dock click, Mission Control). Make it invisible and click-through, so
     // its empty title bar can never show behind the round buddy.
+    w.animationBehavior = NSWindowAnimationBehaviorNone;
     w.alphaValue = 0;
     w.ignoresMouseEvents = YES;
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
@@ -282,7 +286,24 @@ static void PVDrag(id self, SEL _cmd, NSEvent *event) {
 // the full window's style is set again when it comes back.
 static void PVSetStyle(id self, SEL _cmd, NSWindowStyleMask mask) {
     if (gFloating && self == gMain) return;
-    oSetStyle(self, _cmd, mask);
+    // Neutralino changes the style mask on every window.setSize. AppKit throws if that lands
+    // while another visually atomic window change (an ordering animation) is in flight, and
+    // an uncaught exception aborts the app. Retry once on the next turn of the run loop.
+    @try {
+        oSetStyle(self, _cmd, mask);
+    } @catch (NSException *e) {
+        (void)e;
+        __weak NSWindow *weakSelf = (NSWindow *)self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSWindow *w = weakSelf;
+            if (!w || (gFloating && w == gMain)) return;
+            @try {
+                oSetStyle(w, @selector(setStyleMask:), mask);
+            } @catch (NSException *again) {
+                (void)again;
+            }
+        });
+    }
 }
 
 typedef void (*RemoveItemIMP)(id, SEL, NSStatusItem *);
