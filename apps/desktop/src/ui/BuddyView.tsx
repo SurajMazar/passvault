@@ -514,8 +514,8 @@ function Find({ snap, actions, flash, initialQuery = '' }: { snap: SessionSnapsh
                 <I className="size-4 shrink-0 text-fg-subtle" aria-hidden />
                 <button className="min-w-0 flex-1 text-left" onClick={() => actions.openInApp(it.id)} title="Open in PassVault">
                   <div className="flex items-center gap-1.5">
-                    <span className="truncate text-sm font-medium">{p.title || 'Untitled'}</span>
-                    {itemIdentifier(p) && <span className="max-w-[45%] shrink-0 truncate rounded bg-surface-3 px-1.5 py-px text-[10px] text-fg-muted">{itemIdentifier(p)}</span>}
+                    <span title={p.title} className="truncate text-sm font-medium">{p.title || 'Untitled'}</span>
+                    {itemIdentifier(p) && <span title={p.description.trim()} className="max-w-[45%] shrink-0 truncate rounded bg-surface-3 px-1.5 py-px text-[10px] text-fg-muted">{itemIdentifier(p)}</span>}
                   </div>
                   <div className="truncate text-xs text-fg-subtle">{subtitle(it)}</div>
                 </button>
@@ -538,7 +538,7 @@ function EnvKeys({ content, onCopy }: { content: string; onCopy: (key: string, v
     <ul className="pv-view-in mx-2 mb-2 flex max-h-56 flex-col overflow-y-auto rounded-md border border-border pv-scroll">
       {vars.map(([key, value]) => (
         <li key={key} className="flex items-center gap-2 border-b border-border px-2 py-1 last:border-b-0">
-          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg">{key}</code>
+          <code title={key} className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg">{key}</code>
           <Act label={`Copy the value of ${key}`} onClick={() => onCopy(key, value)} icon={<Copy className="size-3" />} text="Copy" />
         </li>
       ))}

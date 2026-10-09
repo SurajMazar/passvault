@@ -1,6 +1,6 @@
 {
   "name": "@passvault/browser-extension",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "private": true,
   "type": "module",
   "description": "PassVault browser extension (Chrome Manifest V3).",

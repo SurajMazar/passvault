@@ -221,15 +221,15 @@ export function ItemsView() {
                 <TypeIcon type={it.payload.type} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="truncate text-[14px] font-medium">{it.payload.title}</span>
+                    <span title={it.payload.title} className="truncate text-[14px] font-medium">{it.payload.title}</span>
                     {itemIdentifier(it.payload) && (
-                      <span className="max-w-[40%] shrink-0 truncate rounded-md bg-surface-3 px-1.5 py-px text-[11px] text-fg-muted">{itemIdentifier(it.payload)}</span>
+                      <span title={it.payload.description.trim()} className="max-w-[40%] shrink-0 truncate rounded-md bg-surface-3 px-1.5 py-px text-[11px] text-fg-muted">{itemIdentifier(it.payload)}</span>
                     )}
                     {it.favorite && <Star className="size-3 shrink-0 fill-warn text-warn" aria-label="Favorite" />}
                   </div>
                   <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
                     <EnvBadge env={it.payload.environment} />
-                    <span className="truncate text-[12.5px] text-fg-subtle">{itemSubtitle(it.payload)}</span>
+                    <span title={itemSubtitle(it.payload)} className="truncate text-[12.5px] text-fg-subtle">{itemSubtitle(it.payload)}</span>
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
