@@ -87,7 +87,7 @@ export function TouchIdSettings() {
         disabled={busy || !status}
         onChange={(v) => void toggle(v)}
         label="Unlock with Touch ID"
-        description="Use your fingerprint instead of typing the master password. Needs PassVault for Mac with “Touch ID in the browser extension” turned on."
+        description="Use your fingerprint instead of typing the master password. Needs PassVault for Mac, with Settings → Browser extension → “Let the PassVault extension use Touch ID” turned on."
       />
       {status?.enabled && !status.available && status.reason && <Banner tone="warn">{status.reason}</Banner>}
     </div>

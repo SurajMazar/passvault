@@ -19,7 +19,23 @@ import { TOUCH_ID_HOST } from '../shared/constants';
 export { TOUCH_ID_HOST };
 
 export const TOUCH_ID_SETUP_HINT =
-  'Open PassVault for Mac → Settings → Touch ID and turn on “Touch ID in the browser extension”, then try again.';
+  'In PassVault for Mac, open Settings → Browser extension and turn on “Let the PassVault extension use Touch ID”, then try again.';
+
+/** Where to get (or update) PassVault for Mac. */
+export const MAC_APP_URL = 'https://github.com/SurajMazar/passvault/releases/latest';
+
+/**
+ * Chrome's error when it cannot reach the host, turned into what the user should do:
+ *  - "forbidden": the Mac app is set up, but for other extension IDs (an older Mac app
+ *    that does not know this copy of the extension, e.g. the Chrome Web Store one);
+ *  - "not found": the Mac app is missing, or Touch ID for the browser is switched off.
+ */
+export function hostErrorMessage(chromeMessage: string): string {
+  if (/forbidden/i.test(chromeMessage)) {
+    return `PassVault for Mac does not recognise this copy of the extension yet. Update PassVault for Mac (${MAC_APP_URL}), open it once, then try again.`;
+  }
+  return `Touch ID needs PassVault for Mac. If it is installed: ${TOUCH_ID_SETUP_HINT} If not, get it from ${MAC_APP_URL}.`;
+}
 
 interface HostReply {
   ok?: boolean;
@@ -65,8 +81,8 @@ export function createTouchIdAdapter(c: ChromeLike, scope: string | undefined, r
     let r: HostReply;
     try {
       r = ((await native(msg)) ?? {}) as HostReply;
-    } catch {
-      throw new TouchIdError('unavailable', `PassVault for Mac is not set up for Touch ID in this browser. ${TOUCH_ID_SETUP_HINT}`);
+    } catch (e) {
+      throw new TouchIdError('unavailable', hostErrorMessage(e instanceof Error ? e.message : String(e)));
     }
     if (!r.ok) {
       const code = r.code ?? 'io_error';

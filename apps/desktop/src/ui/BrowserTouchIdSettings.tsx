@@ -4,12 +4,14 @@ import { errorMessage } from '@passvault/app';
 import { describeHelperError } from '../ipc/helper-client';
 
 /**
- * PassVault browser extension IDs allowed to use Touch ID through this Mac:
- * the release build's fixed ID (manifest key, apps/browser-extension/vite.config.ts)
- * plus any listed at build time (VITE_PV_EXTENSION_IDS, e.g. the Chrome Web Store ID).
+ * PassVault browser extension IDs allowed to use Touch ID through this Mac: the
+ * Chrome Web Store listing, the release zip's fixed ID (manifest key,
+ * apps/browser-extension/vite.config.ts), plus any listed at build time
+ * (VITE_PV_EXTENSION_IDS).
  */
 export const EXTENSION_ORIGINS = [
-  'hpnpkdckiinjkfjolbfkhbekeknhmdff',
+  'phalmlfcnogoddjelcilkcpepjbcecmf', // Chrome Web Store
+  'hpnpkdckiinjkfjolbfkhbekeknhmdff', // release zip
   ...String(import.meta.env.VITE_PV_EXTENSION_IDS ?? '')
     .split(',')
     .map((s) => s.trim())

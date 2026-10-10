@@ -47,6 +47,7 @@ function boot(server: string, servers: ServerManager): Runtime {
     enabled: async () => (await savePrompt.status()).passkeys,
     changed: () => pushPasskeyState(),
     ownOrigins: own,
+    popupOpen: () => ports.size > 0,
   });
   const controller = new BackgroundController({
     chrome: c,

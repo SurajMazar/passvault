@@ -31,3 +31,11 @@ describe('Touch ID adapter', () => {
     expect((await off.status()).available).toBe(false);
   });
 });
+
+describe('Touch ID host errors tell the user what to do', () => {
+  it('distinguishes a Mac app that does not know this extension from a missing setup', async () => {
+    const { hostErrorMessage } = await import('../src/background/touch-id');
+    expect(hostErrorMessage('Access to the specified native messaging host is forbidden.')).toMatch(/Update PassVault for Mac/);
+    expect(hostErrorMessage('Specified native messaging host not found.')).toMatch(/Settings → Browser extension/);
+  });
+});

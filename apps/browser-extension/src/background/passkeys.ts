@@ -72,6 +72,8 @@ interface Pending {
 
 const FALLBACK: PasskeyResult = { fallback: true };
 const TIMEOUT_MS = 3 * 60_000;
+/** How long a request waits for the popup to be opened before it goes back to the browser. */
+export const PROMPT_GRACE_MS = 20_000;
 
 type SessionPart = Pick<VaultSession, 'getSnapshot' | 'isUnlocked' | 'saveItem' | 'updateItem'>;
 
@@ -81,7 +83,7 @@ export class PasskeyManager {
   constructor(
     private readonly c: ChromeLike,
     private readonly session: SessionPart,
-    private readonly hooks: { enabled(): Promise<boolean>; changed(): void; ownOrigins?: string[] },
+    private readonly hooks: { enabled(): Promise<boolean>; changed(): void; ownOrigins?: string[]; popupOpen?: () => boolean },
   ) {}
 
   /** The request waiting for the user, as the popup shows it. */
@@ -201,12 +203,18 @@ export class PasskeyManager {
   }
 
   private async openPrompt() {
+    const id = this.pending?.id;
     try {
       await this.c.action?.openPopup?.();
     } catch {
       // Chrome did not let us open the popup (window not focused): flag the toolbar icon instead.
       await this.c.action?.setBadgeText?.({ text: '1' })?.catch?.(() => undefined);
     }
+    // Never leave a site waiting on a prompt the user cannot see: if no PassVault popup is
+    // open shortly after, the request goes back to the browser.
+    setTimeout(() => {
+      if (this.pending?.id === id && this.hooks.popupOpen && !this.hooks.popupOpen()) this.finish(FALLBACK);
+    }, PROMPT_GRACE_MS);
   }
 
   private logins(): Array<DecryptedItem & { payload: ItemPayload<'login'> }> {

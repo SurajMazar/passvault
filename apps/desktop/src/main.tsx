@@ -129,7 +129,14 @@ const browserTouchId: BrowserTouchIdDeps = {
 
 // Global shortcut: (re)registered with every helper session; a press toggles the buddy.
 helper.onStatus((st) => {
-  if (st.state === 'ready') void menuBar.registerHotKey().catch(() => undefined);
+  if (st.state !== 'ready') return;
+  void menuBar.registerHotKey().catch(() => undefined);
+  // Touch ID for the browser extension: when it is on, refresh the registration so it always
+  // allows this version's extension IDs (e.g. after a Chrome Web Store listing was added).
+  void browserTouchId
+    .status()
+    .then((s) => (s.registered ? browserTouchId.set(true) : undefined))
+    .catch(() => undefined);
 });
 helper.on('hotkey.pressed', () => void menuBar.toggleBuddy());
 
