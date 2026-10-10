@@ -9,7 +9,7 @@
  */
 import { TOTP } from 'otpauth';
 import { MemoryStore } from '@passvault/sync';
-import { VaultSession, newItem, newProject, type Platform } from '@passvault/vault-core';
+import { VaultSession, itemIdentifier, newItem, newProject, type Platform } from '@passvault/vault-core';
 import { diffEnv, entries, parseEnv, setValue } from '@passvault/env-parser';
 import type { ItemPayload } from '@passvault/types';
 
@@ -216,6 +216,66 @@ async function main() {
     const titles = alice2.session.getSnapshot().items.map((i) => i.payload.title).sort();
     check(titles.includes('Storefront prod') && titles.includes('Example Shop') && titles.length === 6, `device 2 sees ${titles.length} items`);
     check(alice2.session.getSnapshot().projects.some((p) => p.payload.name === 'Storefront'), 'device 2 sees the project');
+  });
+
+  await scenario('8. Cards, passkeys, extra login fields and identifiers sync; unknown future fields survive edits', async () => {
+    await alice.session.saveItem(
+      newItem('payment_card', {
+        title: 'Team Visa',
+        description: 'ops-visa',
+        fields: { cardholder: 'Alex Rivera', number: '4111111111111111', expMonth: '08', expYear: '2031', cvv: '123', pin: '' },
+      }),
+    );
+    const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign'])) as CryptoKeyPair;
+    const b64u = (b: ArrayBuffer | Uint8Array) => Buffer.from(b instanceof Uint8Array ? b : new Uint8Array(b)).toString('base64url');
+    const passkey = {
+      credentialId: b64u(crypto.getRandomValues(new Uint8Array(32))),
+      rpId: 'shop.example.com',
+      rpName: 'Example Shop',
+      userHandle: 'dXNlci0x',
+      userName: 'ops@example.com',
+      userDisplayName: 'Ops',
+      alg: -7 as const,
+      privateKey: b64u(await crypto.subtle.exportKey('pkcs8', pair.privateKey)),
+      createdAt: new Date().toISOString(),
+    };
+    await alice.session.saveItem(
+      newItem('login', {
+        title: 'AWS console',
+        description: 'aws-prod-root\nlonger notes about the account',
+        customFields: [{ id: crypto.randomUUID(), label: 'Account ID', type: 'text', value: '123456789012' }],
+        fields: { username: 'ops', password: 'Dummy-Aws-Pass-1!', urls: [{ url: 'https://signin.aws.amazon.com', match: 'host' }], passkeys: [passkey] },
+      }),
+    );
+    // A field written by a newer client this one does not know.
+    await alice.session.updateItem(item(alice, 'AWS console')!.id, (p) => {
+      (p as unknown as Record<string, unknown>).futureField = { kept: true };
+      (p.fields as unknown as Record<string, unknown>).futureLoginField = 'kept';
+    });
+    await alice.session.syncNow();
+    await alice2.session.syncNow();
+
+    const card = item(alice2, 'Team Visa');
+    check(card?.payload.type === 'payment_card', 'card synced to device 2');
+    check(card.payload.fields.number === '4111111111111111' && card.payload.fields.cvv === '123' && itemIdentifier(card.payload) === 'ops-visa', 'card fields and identifier intact');
+    const aws = item(alice2, 'AWS console');
+    check(aws?.payload.type === 'login', 'login synced to device 2');
+    check(aws.payload.fields.passkeys?.[0]?.credentialId === passkey.credentialId && aws.payload.fields.passkeys[0].privateKey === passkey.privateKey, 'passkey synced');
+    check(aws.payload.customFields[0]?.value === '123456789012', 'extra login field synced');
+    check(itemIdentifier(aws.payload) === 'aws-prod-root', 'identifier is the first line of the description');
+
+    // Device 2 edits something unrelated; nothing it does not know about may be lost.
+    await alice2.session.updateItem(aws.id, (p) => void (p.notes = 'rotated'));
+    await alice2.session.syncNow();
+    await alice.session.syncNow();
+    const back = item(alice, 'AWS console')!.payload as unknown as Record<string, unknown> & { fields: Record<string, unknown>; notes: string };
+    const dbg = (d: Device) => { const i = item(d, 'AWS console')!; return `rev=${i.revision} pending=${!!i.pending} conflict=${!!i.conflict} notes=${JSON.stringify(i.payload.notes)}`; };
+    check(back.notes === 'rotated', `edit from device 2 arrived (device1 ${dbg(alice)}; device2 ${dbg(alice2)})`);
+    check((back.futureField as { kept?: boolean })?.kept === true && back.fields.futureLoginField === 'kept', 'unknown fields preserved through another client’s edit');
+    check(Array.isArray(back.fields.passkeys) && (back.fields.passkeys as unknown[]).length === 1, 'passkey preserved through edit');
+
+    const blob = JSON.stringify(await alice.session.api.sync('0'));
+    for (const s of ['4111111111111111', '123456789012', 'aws-prod-root', passkey.privateKey]) check(!blob.includes(s), `sync response leaks "${s}"`);
   });
 
   await scenario('11. Share a project with another user and enforce editing permissions', async () => {

@@ -208,7 +208,10 @@ export class SyncEngine {
     let changed = false;
     const entries = await this.store.outbox();
     const blockedRecords = new Set<string>();
-    for (const entry of entries) {
+    // Edits waiting on an entry pushed earlier in this run, rebased onto its new revision.
+    const rebased = new Map<string, OutboxEntry>();
+    for (const snapshot of entries) {
+      const entry = rebased.get(snapshot.mutationId) ?? snapshot;
       if (entry.status !== 'pending') {
         blockedRecords.add(entry.recordId);
         continue;
@@ -224,7 +227,7 @@ export class SyncEngine {
         await this.store.removeOutbox(entry.mutationId);
         if (result) {
           await this.store.putRecords([result]);
-          await this.rebaseDependents(entry.mutationId, result.revision);
+          for (const d of await this.rebaseDependents(entry.mutationId, result.revision)) rebased.set(d.mutationId, d);
         }
         changed = true;
       } catch (e) {
@@ -271,12 +274,16 @@ export class SyncEngine {
     }
   }
 
-  private async rebaseDependents(mutationId: string, revision: number) {
+  private async rebaseDependents(mutationId: string, revision: number): Promise<OutboxEntry[]> {
+    const out: OutboxEntry[] = [];
     for (const d of await this.store.outbox()) {
       if (d.afterMutationId === mutationId) {
-        await this.store.putOutbox({ ...d, baseRevision: revision, afterMutationId: null });
+        const next = { ...d, baseRevision: revision, afterMutationId: null };
+        await this.store.putOutbox(next);
+        out.push(next);
       }
     }
+    return out;
   }
 
   /** Resolve a conflict. */

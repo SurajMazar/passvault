@@ -103,6 +103,19 @@ describe('sync engine', () => {
     expect(server.records.get(id(6))).toMatchObject({ revision: 2, encryptedPayload: 'v2' });
   });
 
+  it('pushes an edit made right after a create in the same sync (no window for a needless conflict)', async () => {
+    const { engine, server } = await setup();
+    const c = await create(engine, id(11), 'v1');
+    await engine.enqueue({ recordId: id(11), vaultId: VAULT, kind: 'item', op: 'update', baseRevision: null, afterMutationId: c.mutationId, formatVersion: 1, encryptedKey: 'k', encryptedPayload: 'v2' });
+    await engine.sync();
+    expect(server.records.get(id(11))).toMatchObject({ revision: 2, encryptedPayload: 'v2' });
+    expect(engine.getStatus().pending).toBe(0);
+    // Another device now edits revision 2: no conflict on either side.
+    server.remoteEdit(id(11), 'remote-v3');
+    await engine.sync();
+    expect(engine.getStatus()).toMatchObject({ pending: 0, conflicts: 0 });
+  });
+
   it('purges cached records of vaults the user lost access to', async () => {
     const { engine, server, store } = await setup();
     const shared = '00000000-0000-4000-8000-000000000099';

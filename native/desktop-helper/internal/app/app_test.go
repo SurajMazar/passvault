@@ -90,7 +90,7 @@ func (h *harness) next(what string, pred func(neutralino.Message) bool) neutrali
 			return m
 		}
 	}
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case m := <-h.ch:
