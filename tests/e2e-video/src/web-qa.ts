@@ -23,7 +23,7 @@ const WEB_URL = process.env.WEB_URL ?? 'http://localhost:5173';
 const MAILPIT = process.env.MAILPIT_URL ?? 'http://localhost:8025';
 const SHOTS = process.env.PV_SHOTS;
 const RUN = Date.now().toString(36);
-const USER = { name: 'Web QA', email: `webqa.${RUN}@example.com`, password: 'cobalt-lantern-frost-meadow-29' };
+const USER = { name: 'Web QA', email: `webqa.${RUN}@example.com`, password: 'cobalt-lantern-frost-meadow-29' }; // gitleaks:allow (throwaway test account)
 
 const results: Array<{ name: string; ok: boolean; detail?: string }> = [];
 const check = (name: string, ok: boolean, detail?: string) => {
