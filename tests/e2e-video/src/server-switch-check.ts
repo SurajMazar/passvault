@@ -76,6 +76,11 @@ class Target {
   private id = 0;
   private waiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private constructor(private ws: WebSocket) {
+    // A closed window (e.g. the popup closing itself) must fail the step, not hang it.
+    ws.addEventListener('close', () => {
+      for (const w of this.waiting.values()) w.reject(new Error('target closed'));
+      this.waiting.clear();
+    });
     ws.addEventListener('message', (ev) => {
       const m = JSON.parse(String(ev.data)) as { id?: number; result?: unknown; error?: { message: string } };
       const w = m.id !== undefined ? this.waiting.get(m.id) : undefined;
@@ -94,6 +99,7 @@ class Target {
     return new Target(ws);
   }
   send<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    if (this.ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error('target closed'));
     const id = ++this.id;
     this.ws.send(JSON.stringify({ id, method, params }));
     return new Promise<T>((resolve, reject) => this.waiting.set(id, { resolve: resolve as (v: unknown) => void, reject }));
@@ -256,6 +262,11 @@ try {
   await click(popup, byButton('Verify'));
   check('signed in on server A', await waitFor(popup, byButton('Lock'), 20_000));
   await click(popup, byButton('Lock'));
+  // Locking closes the popup; the next toolbar click opens it on the lock screen.
+  await sleep(1000);
+  check('locking closes the popup', !(await targets()).some((t) => t.url.endsWith('/popup.html')));
+  popup.close();
+  popup = await openPopup();
   await waitFor(popup, hasText('PassVault is locked'));
 
   // Change the address to server B (vault already locked: no confirmation needed).

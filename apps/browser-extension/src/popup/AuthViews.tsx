@@ -219,11 +219,17 @@ export function Unlock({ state }: { state: PopupState }) {
   // no popup to relay through), and the stale "unavailable" would hide Touch ID until the
   // next lock.
   const [bio, setBio] = useState(!!state.biometricAvailable);
+  // Turned on but not usable right now: say why instead of silently hiding the button.
+  const [bioProblem, setBioProblem] = useState<string | null>(null);
   useEffect(() => {
     if (state.biometricAvailable) return setBio(true);
     let live = true;
     void call({ type: 'touchid.status' })
-      .then((s) => live && setBio(s.enabled && s.available))
+      .then((s) => {
+        if (!live) return;
+        setBio(s.enabled && s.available);
+        setBioProblem(s.enabled && !s.available ? s.reason || 'Touch ID cannot be reached right now.' : null);
+      })
       .catch(() => undefined);
     return () => {
       live = false;
@@ -262,6 +268,12 @@ export function Unlock({ state }: { state: PopupState }) {
           <Button type="button" size="lg" disabled={busy} onClick={touchId} icon={<Fingerprint className="size-4" />}>
             Unlock with Touch ID
           </Button>
+        )}
+        {!bio && bioProblem && (
+          <p className="flex gap-2 text-xs leading-relaxed text-fg-muted" role="status">
+            <Fingerprint className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span>Touch ID is on but can’t be used right now. {bioProblem} Your master password always works.</span>
+          </p>
         )}
       </form>
       {!state.hasSession && (
