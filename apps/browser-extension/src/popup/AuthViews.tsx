@@ -214,13 +214,28 @@ export function Unlock({ state }: { state: PopupState }) {
     void run(async () => {
       await call({ type: 'auth.unlockBiometric' });
     });
+  // Ask when the popup opens instead of trusting the flag computed when the vault locked:
+  // the background often cannot reach the Touch ID host at that moment (a restarted worker,
+  // no popup to relay through), and the stale "unavailable" would hide Touch ID until the
+  // next lock.
+  const [bio, setBio] = useState(!!state.biometricAvailable);
   useEffect(() => {
-    if (state.biometricAvailable && !touchIdTried) {
+    if (state.biometricAvailable) return setBio(true);
+    let live = true;
+    void call({ type: 'touchid.status' })
+      .then((s) => live && setBio(s.enabled && s.available))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [state.biometricAvailable]);
+  useEffect(() => {
+    if (bio && !touchIdTried) {
       touchIdTried = true;
       // Automatic prompt: cancelling it ("Use Master Password") is not an error.
       void call({ type: 'auth.unlockBiometric' }).catch(() => undefined);
     }
-  }, [state.biometricAvailable]);
+  }, [bio]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
@@ -243,7 +258,7 @@ export function Unlock({ state }: { state: PopupState }) {
         <Button type="submit" variant="primary" size="lg" loading={busy} disabled={!password} icon={<Lock className="size-4" />}>
           Unlock
         </Button>
-        {state.biometricAvailable && (
+        {bio && (
           <Button type="button" size="lg" disabled={busy} onClick={touchId} icon={<Fingerprint className="size-4" />}>
             Unlock with Touch ID
           </Button>
