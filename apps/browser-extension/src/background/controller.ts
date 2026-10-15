@@ -46,7 +46,8 @@ import type { ChromeLike, SenderLike } from './chrome-api';
 import { itemDetail, summarize } from './detail';
 import { TOKEN_KEY } from './platform';
 import type { ServerCheck } from '@passvault/vault-core/servers';
-import type { ServerInfo, TouchIdStatus } from '../shared/protocol';
+import type { PasskeyUnlockStatus, ServerInfo } from '../shared/protocol';
+import { CLOSE_AFTER_SUCCESS_MS, UnlockCancelled, type UnlockWindow } from './passkey-unlock';
 import { checkSender } from './sender';
 import type { SavePromptManager } from './save-prompt';
 import type { PasskeyManager } from './passkeys';
@@ -85,6 +86,7 @@ type SessionLike = Pick<
   | 'enableBiometrics'
   | 'disableBiometrics'
   | 'biometricsEnabled'
+  | 'reconcileBiometrics'
 >;
 
 export interface ControllerDeps {
@@ -99,8 +101,8 @@ export interface ControllerDeps {
   tokenKey?: string;
   /** server connection (index.ts rebuilds the session when the server changes) */
   server?: ServerControl;
-  /** Touch ID availability (the platform's biometrics adapter) */
-  touchIdStatus?: () => Promise<{ available: boolean; reason?: string }>;
+  /** passkey unlock: availability (the platform's biometrics adapter) and its window */
+  passkeyUnlock?: { status: () => Promise<{ available: boolean; reason?: string }>; window: Pick<UnlockWindow, 'cancel'> };
   /** passkey requests from pages (background/passkeys.ts) */
   passkeys?: Pick<PasskeyManager, 'view' | 'decide' | 'clear'>;
 }
@@ -191,6 +193,10 @@ export class BackgroundController {
   private pendingAfterLock: Promise<void> | null = null;
   /** whether a server session token exists (unlocked-but-signed-out = offline copy only) */
   private hasToken = false;
+  /** Touch ID (PassVault for Mac) was on and was turned off for passkey unlock: tell the user once */
+  private touchIdReplaced = false;
+  /** the user closed the passkey window or chose the master password: no automatic window until the next lock */
+  private passkeyDeclined = false;
 
   constructor(private readonly deps: ControllerDeps) {
     this.c = deps.chrome;
@@ -236,7 +242,16 @@ export class BackgroundController {
         await this.c.storage.session.remove(RESUME_KEY);
       }
     }
+    // Touch ID through PassVault for Mac was replaced by passkey unlock: its key is not
+    // here, so the old setting would offer an unlock that cannot work.
+    const flag = this.replacedFlagKey();
+    if (await this.session.reconcileBiometrics().catch(() => false)) await this.c.storage.local.set({ [flag]: true });
+    this.touchIdReplaced = (await this.c.storage.local.get(flag))[flag] === true;
     this.session.subscribe((s) => this.onSnapshot(s));
+  }
+
+  private replacedFlagKey() {
+    return (this.deps.tokenKey ?? TOKEN_KEY).replace(/sessionToken$/, 'touchIdReplaced');
   }
 
   onState(fn: (s: PopupState) => void): () => void {
@@ -251,6 +266,11 @@ export class BackgroundController {
   }
 
   private onSnapshot(s: SessionSnapshot) {
+    // A passkey window still asking to unlock is pointless once the vault is open (and an
+    // enrolment window once it is locked again): close it, no fingerprint prompt left behind.
+    if (s.auth.phase === 'unlocked') this.deps.passkeyUnlock?.window.cancel('The vault is already unlocked.', 'unlock');
+    else this.deps.passkeyUnlock?.window.cancel('The vault is locked.', 'enroll');
+    if (s.auth.phase !== 'locked') this.passkeyDeclined = false;
     if (s.items !== this.lastItemsRef) {
       this.lastItemsRef = s.items;
       this.dataVersion++;
@@ -262,14 +282,25 @@ export class BackgroundController {
     for (const l of this.stateListeners) l(st);
   }
 
-  private async touchIdStatus(): Promise<TouchIdStatus> {
+  private async passkeyUnlockStatus(): Promise<PasskeyUnlockStatus> {
     const enabled = await this.session.biometricsEnabled();
-    return { enabled, ...(await this.touchIdAvailability()) };
+    const st = this.deps.passkeyUnlock ? await this.deps.passkeyUnlock.status() : { available: false, reason: 'Passkey unlock is not available' };
+    return { enabled, ...st, ...(this.touchIdReplaced ? { touchIdReplaced: true } : {}) };
   }
 
-  private async touchIdAvailability(): Promise<{ available: boolean; reason?: string }> {
-    const status = this.deps.touchIdStatus;
-    return status ? status() : { available: false, reason: 'Touch ID is not available' };
+  /**
+   * After the passkey window: show the vault (or the lock screen) again. Chrome only opens
+   * the toolbar popup in a normal browser window, so wait until the passkey window is gone.
+   */
+  private reopenPopup() {
+    setTimeout(async () => {
+      try {
+        const w = await this.c.windows?.getLastFocused?.({ windowTypes: ['normal'] });
+        await this.c.action?.openPopup?.(w?.id !== undefined ? { windowId: w.id } : undefined);
+      } catch {
+        /* no browser window to show it in: the toolbar icon still works */
+      }
+    }, CLOSE_AFTER_SUCCESS_MS + 150);
   }
 
   popupState(): PopupState {
@@ -284,7 +315,8 @@ export class BackgroundController {
       ...(a.phase === 'mfa_enroll' ? { mfaEnroll: { secret: a.secret, otpauthUri: a.otpauthUri } } : {}),
       ...(a.phase === 'recovery_codes' ? { recoveryCodes: a.codes } : {}),
       hasSession: a.phase === 'locked' ? a.hasSession : (a.phase === 'unlocked' || a.phase === 'recovery_codes') && this.hasToken,
-      ...(a.phase === 'locked' ? { biometricAvailable: a.biometricAvailable } : {}),
+      ...(a.phase === 'locked' ? { biometricAvailable: a.biometricAvailable, passkeyAutoStart: a.biometricAvailable && !this.passkeyDeclined } : {}),
+      ...(this.touchIdReplaced ? { touchIdReplaced: true } : {}),
       passkey: this.deps.passkeys?.view() ?? null,
       online: s.online,
       sync: {
@@ -507,15 +539,37 @@ export class BackgroundController {
         await this.lock('user');
         return this.popupState();
       case 'auth.unlockBiometric':
-        await s.unlockWithBiometrics();
+        // Only ever from the lock screen: an open vault never asks for a passkey.
+        if (s.isUnlocked) return this.popupState();
+        try {
+          await s.unlockWithBiometrics();
+        } catch (e) {
+          if (!(e instanceof UnlockCancelled)) throw e;
+          this.passkeyDeclined = true;
+          this.pushState();
+          this.reopenPopup();
+          return this.popupState();
+        }
         await this.syncResumeKey();
+        this.reopenPopup();
         return this.popupState();
-      case 'touchid.status':
-        return this.touchIdStatus();
-      case 'touchid.set':
-        if (req.enabled) await s.enableBiometrics();
-        else await s.disableBiometrics();
-        return this.touchIdStatus();
+      case 'passkeyUnlock.status':
+        return this.passkeyUnlockStatus();
+      case 'passkeyUnlock.set':
+        if (req.enabled) {
+          try {
+            await s.enableBiometrics();
+          } catch (e) {
+            if (!(e instanceof UnlockCancelled)) throw e;
+            this.reopenPopup();
+            return this.passkeyUnlockStatus();
+          }
+          this.touchIdReplaced = false;
+          await this.c.storage.local.remove(this.replacedFlagKey());
+          this.reopenPopup();
+        } else await s.disableBiometrics();
+        this.pushState();
+        return this.passkeyUnlockStatus();
       case 'auth.logout':
         await this.c.storage.session.remove(RESUME_KEY);
         this.resumeStored = false;

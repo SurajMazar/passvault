@@ -30,14 +30,20 @@ export interface SenderLike {
 
 export interface ChromeLike {
   /** toolbar popup (inline menu: "Unlock" opens it when Chrome allows) */
-  action?: { openPopup?(): Promise<void>; setBadgeText?(d: { text: string }): Promise<void> };
+  action?: { openPopup?(options?: { windowId?: number }): Promise<void>; setBadgeText?(d: { text: string }): Promise<void> };
   runtime: {
     id: string;
     getURL(path: string): string;
     getManifest(): { version: string };
     sendMessage(message: unknown): Promise<unknown>;
-    /** Touch ID host (optional "nativeMessaging" permission) */
-    sendNativeMessage?(application: string, message: object): Promise<unknown>;
+  };
+  /** the passkey-unlock window (background/passkey-unlock.ts) */
+  windows?: {
+    create(props: { url: string; type: 'popup'; width: number; height: number; focused: boolean }): Promise<{ id?: number; tabs?: TabLike[] } | undefined>;
+    update?(windowId: number, props: { focused: boolean }): Promise<unknown>;
+    remove?(windowId: number): Promise<void>;
+    getLastFocused?(filter: { windowTypes: Array<'normal'> }): Promise<{ id?: number } | undefined>;
+    onRemoved?: { addListener(fn: (windowId: number) => void): void };
   };
   storage: {
     local: StorageAreaLike;

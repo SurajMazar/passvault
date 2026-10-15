@@ -204,44 +204,25 @@ export function RecoveryCodes({ state }: { state: PopupState }) {
   );
 }
 
-/** Touch ID is offered once per popup opening; after a cancel the button stays. */
-let touchIdTried = false;
+/** The passkey window opens by itself once per popup opening; after that only the button does. */
+let passkeyTried = false;
 
 export function Unlock({ state }: { state: PopupState }) {
   const [password, setPassword] = useState('');
   const { busy, error, run } = useSubmit();
-  const touchId = () =>
+  // Opens PassVault's passkey window (the toolbar popup closes meanwhile and comes back
+  // unlocked). The background only does this while the vault is locked.
+  const passkey = () =>
     void run(async () => {
       await call({ type: 'auth.unlockBiometric' });
     });
-  // Ask when the popup opens instead of trusting the flag computed when the vault locked:
-  // the background often cannot reach the Touch ID host at that moment (a restarted worker,
-  // no popup to relay through), and the stale "unavailable" would hide Touch ID until the
-  // next lock.
-  const [bio, setBio] = useState(!!state.biometricAvailable);
-  // Turned on but not usable right now: say why instead of silently hiding the button.
-  const [bioProblem, setBioProblem] = useState<string | null>(null);
+  const bio = !!state.biometricAvailable;
   useEffect(() => {
-    if (state.biometricAvailable) return setBio(true);
-    let live = true;
-    void call({ type: 'touchid.status' })
-      .then((s) => {
-        if (!live) return;
-        setBio(s.enabled && s.available);
-        setBioProblem(s.enabled && !s.available ? s.reason || 'Touch ID cannot be reached right now.' : null);
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [state.biometricAvailable]);
-  useEffect(() => {
-    if (bio && !touchIdTried) {
-      touchIdTried = true;
-      // Automatic prompt: cancelling it ("Use Master Password") is not an error.
+    if (state.passkeyAutoStart && !passkeyTried) {
+      passkeyTried = true;
       void call({ type: 'auth.unlockBiometric' }).catch(() => undefined);
     }
-  }, [bio]);
+  }, [state.passkeyAutoStart]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
@@ -265,14 +246,14 @@ export function Unlock({ state }: { state: PopupState }) {
           Unlock
         </Button>
         {bio && (
-          <Button type="button" size="lg" disabled={busy} onClick={touchId} icon={<Fingerprint className="size-4" />}>
-            Unlock with Touch ID
+          <Button type="button" size="lg" disabled={busy} onClick={passkey} icon={<Fingerprint className="size-4" />}>
+            Unlock with passkey
           </Button>
         )}
-        {!bio && bioProblem && (
+        {!bio && state.touchIdReplaced && (
           <p className="flex gap-2 text-xs leading-relaxed text-fg-muted" role="status">
             <Fingerprint className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            <span>Touch ID is on but can’t be used right now. {bioProblem} Your master password always works.</span>
+            <span>Touch ID unlock is now passkey unlock and needs no Mac app. Unlock with your master password, then turn it on in Settings.</span>
           </p>
         )}
       </form>

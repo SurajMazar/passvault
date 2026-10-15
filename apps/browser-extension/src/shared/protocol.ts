@@ -45,8 +45,8 @@ export const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('auth.unlock'), password: z.string().min(1).max(1024) }).strict(),
   z.object({ type: z.literal('auth.lock') }).strict(),
   z.object({ type: z.literal('auth.unlockBiometric') }).strict(),
-  z.object({ type: z.literal('touchid.status') }).strict(),
-  z.object({ type: z.literal('touchid.set'), enabled: z.boolean() }).strict(),
+  z.object({ type: z.literal('passkeyUnlock.status') }).strict(),
+  z.object({ type: z.literal('passkeyUnlock.set'), enabled: z.boolean() }).strict(),
   z.object({ type: z.literal('auth.logout') }).strict(),
   z.object({ type: z.literal('vault.sync') }).strict(),
   z.object({ type: z.literal('vault.list'), query: short(200).optional(), limit: z.int().min(1).max(500).optional() }).strict(),
@@ -156,8 +156,12 @@ export interface PopupState {
   /** only in the recovery_codes phase (popup only) */
   recoveryCodes?: string[];
   hasSession: boolean;
-  /** locked: Touch ID unlock is set up and usable */
+  /** locked: passkey unlock is set up */
   biometricAvailable?: boolean;
+  /** locked: open the passkey window by itself when the popup opens (not after the user declined it) */
+  passkeyAutoStart?: boolean;
+  /** Touch ID (through PassVault for Mac) was on and has been replaced by passkey unlock */
+  touchIdReplaced?: boolean;
   /** a site's passkey request waiting for the user's decision */
   passkey?: PasskeyRequestView | null;
   online: boolean;
@@ -301,8 +305,8 @@ export interface ResponseMap {
   'auth.unlock': PopupState;
   'auth.lock': PopupState;
   'auth.unlockBiometric': PopupState;
-  'touchid.status': TouchIdStatus;
-  'touchid.set': TouchIdStatus;
+  'passkeyUnlock.status': PasskeyUnlockStatus;
+  'passkeyUnlock.set': PasskeyUnlockStatus;
   'auth.logout': PopupState;
   'vault.sync': PopupState;
   'vault.list': { items: ItemSummary[]; total: number };
@@ -335,12 +339,14 @@ export interface ResponseMap {
 
 /** "Offer to save passwords" setting (requires the optional all-sites host permission). */
 /** Touch ID unlock through PassVault for Mac (background/touch-id.ts). */
-export interface TouchIdStatus {
-  /** this Mac can do it right now (host registered, Touch ID enrolled, permission granted) */
+export interface PasskeyUnlockStatus {
+  /** this browser can open the passkey window */
   available: boolean;
   /** turned on for this account in this browser */
   enabled: boolean;
   reason?: string;
+  /** Touch ID (through PassVault for Mac) was on before and has been replaced */
+  touchIdReplaced?: boolean;
 }
 
 export interface AutoSaveStatus {
@@ -356,10 +362,7 @@ export interface AutoSaveStatus {
 export type RequestOf<T extends RequestType> = Extract<Request, { type: T }>;
 
 
-export type PortMessageToPopup =
-  | { type: 'state'; state: PopupState }
-  /** Touch ID host call the worker cannot make itself (see background/touch-id.ts) */
-  | { type: 'native'; id: number; message: Record<string, unknown> };
-export type PortMessageToBackground = { type: 'keepalive' } | { type: 'native.reply'; id: number; ok: boolean; reply?: unknown; error?: string };
+export type PortMessageToPopup = { type: 'state'; state: PopupState };
+export type PortMessageToBackground = { type: 'keepalive' };
 
 export type OffscreenMessage = { target: typeof OFFSCREEN_TARGET; type: 'clipboard.clear' };

@@ -104,20 +104,19 @@ to `chrome.scripting.executeScript({ func, args })`.
 | `offscreen` | An offscreen document (reason `CLIPBOARD`) clears the clipboard after the configured timeout. The service worker has no clipboard access, and the popup is usually closed by then. | none |
 | `clipboardWrite` | Lets the offscreen document write an empty string to the clipboard without a user gesture. | may show "Modify data you copy and paste" |
 | `host_permissions: [<default server origin>/*]` | API calls from the service worker to the built-in server (production, else `http://localhost:3000`). | "Read and change your data on <api host>" |
-| `optional_permissions: [nativeMessaging]` | Requested at runtime only, when the user turns on **Unlock with Touch ID** (macOS). Talks only to `io.passvault.touchid`, the host PassVault for Mac registers. Removed again when Touch ID is turned off. | "Communicate with cooperating native applications" |
 | `optional_host_permissions: [https://*/*, http://*/*]` | Requested at runtime only: **all sites** if the user enables "Offer to save passwords" (lets the opt-in content script notice login form submissions), or **one origin** when the user tests or connects to another server. Removable at any time. | "Read and change all your data on all websites" (when enabling the save prompt) or "… on <server host>" (when switching server) |
 
 Deliberately **not** requested: `<all_urls>` or any other website host
-permission, `tabs`, `webRequest`, `cookies`, `nativeMessaging` at install
-(it is optional, see above), content scripts, `externally_connectable`, and
+permission, `tabs`, `webRequest`, `cookies`, `nativeMessaging` (passkey
+unlock needs no desktop app), content scripts, `externally_connectable`, and
 `web_accessible_resources`. A manifest unit test checks this list.
 
 The manifest carries a `key` (public half only) so installs from the release
-zip always get the same ID, `hpnpkdckiinjkfjolbfkhbekeknhmdff`, which PassVault
-for Mac allow-lists for Touch ID. The Chrome Web Store assigns its own ID and
-refuses a `key`, so `pnpm zip` also writes
-`passvault-extension-<version>-chrome-web-store.zip` without it; add the store
-ID to the desktop build with `VITE_PV_EXTENSION_IDS`.
+zip always get the same ID, `hpnpkdckiinjkfjolbfkhbekeknhmdff` (passkey
+unlock's relying party is the extension origin, so it must not change between
+updates). The Chrome Web Store assigns its own ID and refuses a `key`, so
+`pnpm zip` also writes `passvault-extension-<version>-chrome-web-store.zip`
+without it.
 
 CSP: `extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"`.
 
@@ -338,25 +337,41 @@ alive, but if the popup closes and the worker is suspended, the user signs in
 again. MFA verification supports a TOTP code, a recovery code, and "trust
 this browser".
 
-## Touch ID unlock (macOS)
+## Passkey unlock
 
-1. PassVault for Mac → Settings → **Touch ID in the browser extension** registers
-   `pv-touchid` (inside PassVault.app) as the native-messaging host
-   `io.passvault.touchid` for the extension's ID, in every installed Chromium
-   browser (`~/Library/Application Support/<browser>/NativeMessagingHosts/`).
-2. Extension → Settings → **Unlock with Touch ID** asks for the optional
-   `nativeMessaging` permission, then vault-core's `enableBiometrics` wraps the
-   user key with a random device key and hands that key to the host
-   (`enroll`), which seals it to a Secure Enclave key that needs a current
-   Touch ID match. The wrapped user key stays in this browser's storage.
-3. When locked, the popup offers Touch ID (once automatically per opening; the
-   prompt's cancel button says "Use Master Password"). The host releases the
-   device key only after the enclave accepts the fingerprint.
+Unlock with a passkey (Touch ID, Windows Hello, a phone…) instead of the master
+password, the same way as the web dashboard. No desktop app is involved.
 
-Chrome passes the calling extension's origin to the host, and the host keeps
-a separate namespace per origin (and for the desktop app), so one caller can
-never read another's key. The prompt text is fixed by the host. The master
-password always works; turning Touch ID off deletes the sealed key.
+1. Extension → Settings → **Unlock with a passkey** opens PassVault's passkey
+   window (`unlock.html`, a small extension window; the toolbar popup would be
+   closed by Chrome as soon as the passkey sheet takes focus, cancelling the
+   request). The window creates a passkey whose relying party is the
+   extension's own origin, with user verification required, and asks it for a
+   WebAuthn PRF secret over a random salt.
+2. vault-core's `enableBiometrics` wraps the user key with a random device
+   key; the background seals that device key with AES-256-GCM under
+   HKDF(PRF secret) (AAD = account id). Only `{ credential id, salt, iv,
+   sealed }` is stored, in `chrome.storage.local` per server. The PRF secret
+   is never stored.
+3. When locked, opening the popup opens the passkey window once by itself
+   (and the lock screen keeps an **Unlock with passkey** button). The window
+   asks the passkey for the same secret (released only after user
+   verification); the background opens the seal and unlocks, closes the
+   window and brings the popup back.
+
+Rules: the window is opened only while the vault is locked (an unlock request
+while unlocked does nothing), and is closed as soon as the vault opens another
+way (no prompt left behind). After **Use master password** or closing the
+window it does not reopen by itself until the next lock. The background
+answers only the window it opened, for the current request (sender URL, tab
+and request id). Passkey providers without PRF (e.g. iCloud Keychain before
+macOS 15) are reported in the window; the master password always works.
+Turning it off forgets the sealed key (the passkey itself stays in the
+user's password manager).
+
+Touch ID through PassVault for Mac (versions up to 0.1.21) is replaced by
+this: a browser that had it on turns it off on update and shows a one-time
+hint to turn on passkey unlock.
 
 ## Known limitations
 
@@ -441,7 +456,7 @@ suggestions), PassVault acts as a passkey provider:
   the browser-reported origin. Passkeys are stored in the matching login's
   `fields.passkeys` (private key = secret), end-to-end encrypted and synced; the
   dashboard lists and deletes them.
-- When the vault is locked, a passkey request first asks to unlock (Touch ID or
+- When the vault is locked, a passkey request first asks to unlock (passkey or
   master password). When unlocked and PassVault has no passkey for the site, sign-in
   requests go straight to Chrome without asking.
 

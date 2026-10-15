@@ -47,6 +47,8 @@ export interface BiometricUnlockAdapter {
   /** Retrieve it; triggers the OS biometric prompt. */
   retrieveKey(accountId: string, reason: string): Promise<Uint8Array>;
   removeKey(accountId: string): Promise<void>;
+  /** Whether a key is stored for this account (lets the session drop a stale setting). */
+  hasKey?(accountId: string): Promise<boolean>;
 }
 
 export interface Platform {

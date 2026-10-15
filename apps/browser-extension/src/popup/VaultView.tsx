@@ -24,13 +24,12 @@ import { ServerSettings } from './ServerSwitch';
 import { Generator } from './Generator';
 import { activeTabId, call, copyToClipboard, errorText } from './rpc';
 import { SaveLogin } from './SaveLogin';
-import { isMac, touchIdContinuing, TouchIdSettings } from './TouchIdSettings';
+import { PasskeyUnlockSettings } from './PasskeyUnlockSettings';
 
 type Route = { view: 'list' } | { view: 'detail'; id: string } | { view: 'save' };
 
 export function VaultView({ state }: { state: PopupState }) {
-  // Back on Settings after the popup reloaded itself to finish turning on Touch ID.
-  const [tab, setTab] = useState<'vault' | 'cards' | 'generator' | 'settings'>(() => (touchIdContinuing() ? 'settings' : 'vault'));
+  const [tab, setTab] = useState<'vault' | 'cards' | 'generator' | 'settings'>('vault');
   const [route, setRoute] = useState<Route>({ view: 'list' });
   const [tabId, setTabId] = useState<number | null>(null);
   useEffect(() => {
@@ -63,12 +62,8 @@ export function VaultView({ state }: { state: PopupState }) {
           <Generator />
         ) : tab === 'settings' && route.view === 'list' ? (
           <>
-            {isMac() && (
-              <>
-                <TouchIdSettings />
-                <div className="border-t border-border" />
-              </>
-            )}
+            <PasskeyUnlockSettings />
+            <div className="border-t border-border" />
             <ServerSettings state={state} />
             <div className="border-t border-border" />
             <AutoSaveSettings />

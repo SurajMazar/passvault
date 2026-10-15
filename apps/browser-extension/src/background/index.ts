@@ -14,6 +14,7 @@ import { createLogger } from './log';
 import { createExtensionPlatform, tokenKey } from './platform';
 import { checkSender } from './sender';
 import { PasskeyManager } from './passkeys';
+import { UnlockWindow, isUnlockPageMessage } from './passkey-unlock';
 import { SavePromptManager } from './save-prompt';
 import { InlineMenuManager, isInlineMessage } from './inline-menu';
 import { ServerManager, defaultServer, loadProfiles, migrateLegacyStorage, serverScope, webUrlFor } from './servers';
@@ -22,6 +23,8 @@ const c = chrome as unknown as ChromeLike;
 // Diagnostics: fixed event names and codes only. Never message payloads.
 const log = createLogger();
 const DEFAULT_SERVER = defaultServer(PRODUCTION_API_URL);
+// Passkey unlock runs in its own small window (see passkey-unlock.ts); one request at a time.
+const unlockWindow = new UnlockWindow(c);
 
 interface Runtime {
   server: string;
@@ -36,7 +39,7 @@ interface Runtime {
 function boot(server: string, servers: ServerManager): Runtime {
   const scope = serverScope(server);
   const webUrl = webUrlFor(server, PRODUCTION_API_URL, PRODUCTION_WEB_URL);
-  const platform = createExtensionPlatform(c, { apiBaseUrl: server, webAppUrl: webUrl, scope, nativeRelay: relayFromPopup });
+  const platform = createExtensionPlatform(c, { apiBaseUrl: server, webAppUrl: webUrl, scope, unlockWindow });
   const session = new VaultSession(platform);
   // Never offer to save passwords typed into PassVault's own pages.
   const own = [...new Set([new URL(webUrl).origin, new URL(server).origin])];
@@ -57,7 +60,7 @@ function boot(server: string, servers: ServerManager): Runtime {
     savePrompt,
     tokenKey: tokenKey(scope),
     server: servers,
-    touchIdStatus: () => platform.biometrics?.status() ?? Promise.resolve({ available: false }),
+    passkeyUnlock: { status: () => platform.biometrics?.status() ?? Promise.resolve({ available: false }), window: unlockWindow },
     passkeys,
   });
   pushPasskeyState = () => controller.pushState();
@@ -77,6 +80,7 @@ async function activate(url: string, servers: ServerManager): Promise<void> {
   const rt = await current;
   log('server switch');
   await rt.controller.lock('server switch');
+  unlockWindow.cancel('Switched to another server.');
   rt.session.dispose();
   await rt.savePrompt.clearAll();
   rt.passkeys.clear();
@@ -104,33 +108,6 @@ let current: Promise<Runtime> = (async () => {
 /** Open popup ports and their state subscriptions (re-attached on a server switch). */
 const ports = new Map<chrome.runtime.Port, () => void>();
 
-/** Touch ID host calls made by the open popup on the worker's behalf (background/touch-id.ts). */
-const nativeCalls = new Map<number, { port: chrome.runtime.Port; resolve: (v: unknown) => void; reject: (e: Error) => void }>();
-let nativeSeq = 0;
-function relayFromPopup(message: Record<string, unknown>): Promise<unknown> {
-  const port = [...ports.keys()].at(-1);
-  if (!port) return Promise.reject(new Error('Open the PassVault popup to use Touch ID.'));
-  const id = ++nativeSeq;
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      nativeCalls.delete(id);
-      reject(new Error('Touch ID timed out'));
-    }, 120_000);
-    nativeCalls.set(id, {
-      port,
-      resolve: (v) => (clearTimeout(timer), resolve(v)),
-      reject: (e) => (clearTimeout(timer), reject(e)),
-    });
-    try {
-      port.postMessage({ type: 'native', id, message } satisfies PortMessageToPopup);
-    } catch {
-      nativeCalls.delete(id);
-      clearTimeout(timer);
-      reject(new Error('Open the PassVault popup to use Touch ID.'));
-    }
-  });
-}
-
 function attach(port: chrome.runtime.Port, rt: Runtime): () => void {
   const send = (state: Extract<PortMessageToPopup, { type: 'state' }>['state']) => {
     try {
@@ -147,6 +124,11 @@ function attach(port: chrome.runtime.Port, rt: Runtime): () => void {
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   // Messages addressed to the offscreen document are not for us.
   if (message && typeof message === 'object' && (message as { target?: unknown }).target === OFFSCREEN_TARGET) return false;
+  // The passkey-unlock window (an extension page in its own window, so it has a tab).
+  if (isUnlockPageMessage(message)) {
+    sendResponse(unlockWindow.handle(message, sender));
+    return false;
+  }
   void current.then((rt): Promise<unknown> =>
     // Messages from web-page tabs can only be the opt-in save-prompt content script;
     // they are handled (and validated) separately and never reach privileged handlers.
@@ -176,24 +158,11 @@ chrome.runtime.onConnect.addListener((port) => {
     setTimeout(() => {
       if (ports.size === 0) void current.then((rt) => rt.passkeys.popupClosed());
     }, 1500);
-    // Touch ID calls this popup was relaying can no longer be answered.
-    for (const [id, call] of nativeCalls) {
-      if (call.port !== port) continue;
-      nativeCalls.delete(id);
-      call.reject(new Error('The PassVault popup closed.'));
-    }
     ports.get(port)?.();
     ports.delete(port);
   });
-  port.onMessage.addListener((m: PortMessageToBackground) => {
-    // keepalives are not counted as user activity; replies finish relayed Touch ID calls
-    if (m?.type !== 'native.reply' || typeof m.id !== 'number') return;
-    const pending = nativeCalls.get(m.id);
-    if (!pending) return;
-    nativeCalls.delete(m.id);
-    if (m.ok) pending.resolve(m.reply);
-    else pending.reject(new Error(m.error || 'Touch ID failed'));
-  });
+  // keepalives only (not counted as user activity)
+  port.onMessage.addListener((_m: PortMessageToBackground) => undefined);
   void current.then((rt) => {
     if (!closed) ports.set(port, attach(port, rt));
   });

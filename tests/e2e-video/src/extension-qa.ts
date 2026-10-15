@@ -7,22 +7,25 @@
  *   sign in with two-step code · website logins only (no SSH keys or notes)
  *   · identifiers · "this site" and "other websites" searches · fill a login
  *   · fill a login with an extra field (AWS-style account ID) · fill a card
- *   on a checkout page · lock closes the popup · Touch ID: turn on, the lock
- *   screen unlocks by itself when the popup opens, and a missing or
- *   unavailable Touch ID never blocks the master password · nothing secret
- *   in chrome.storage.local.
+ *   on a checkout page · lock closes the popup · passkey unlock: turn on in
+ *   the passkey window, the lock screen unlocks by itself when the popup
+ *   opens, never a passkey prompt while unlocked, "Use master password",
+ *   the master password winning over a waiting passkey window · nothing
+ *   secret in chrome.storage.local.
  *
- * Touch ID goes through Chrome's real native messaging to a stand-in host
- * that speaks pv-touchid's protocol (no fingerprint prompt on the tester's
- * screen); pv-touchid itself is checked separately. Test-only manifest
- * changes in a copy of the build: nativeMessaging granted up front and
- * https host access (as if the user had allowed them).
+ * Passkeys: the real passkey window gets Chrome's virtual authenticator
+ * (user verification + PRF) and is reloaded with a small hook before its
+ * scripts, so the page's own code creates the passkey for real; the hook
+ * records the PRF answer, which later unlock windows replay (a virtual
+ * authenticator cannot be shared between windows) or replace with a cancel.
+ * Test-only manifest change in a copy of the build: https/http host access
+ * (as if the user had allowed it).
  *
  *   (cd apps/browser-extension && npx vite build --mode e2e --outDir /tmp/pv-ext-local)
  *   PV_EXT_DIR=/tmp/pv-ext-local pnpm --filter @passvault/e2e-video check:extension
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -48,8 +51,6 @@ const EXT = join(work, 'ext');
 cpSync(SRC, EXT, { recursive: true });
 const manifest = JSON.parse(readFileSync(join(EXT, 'manifest.json'), 'utf8')) as { permissions: string[]; optional_permissions?: string[]; host_permissions: string[] };
 if (!manifest.host_permissions.includes('http://localhost:3000/*')) throw new Error('Expected a local-development build (host http://localhost:3000)');
-manifest.permissions = [...new Set([...manifest.permissions, 'nativeMessaging'])];
-manifest.optional_permissions = (manifest.optional_permissions ?? []).filter((p) => p !== 'nativeMessaging');
 manifest.host_permissions = [...new Set([...manifest.host_permissions, 'https://*/*', 'http://*/*'])];
 writeFileSync(join(EXT, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
@@ -86,48 +87,6 @@ const SITE_PORT = (site.address() as { port: number }).port;
 const SITE = `https://localhost:${SITE_PORT}`;
 const AWS_SITE = `https://127.0.0.1:${SITE_PORT}`;
 
-// ------------------------------------------------------------ stand-in Touch ID host (pv-touchid protocol)
-const hostDir = join(work, 'host');
-mkdirSync(hostDir);
-const HOST_LOG = join(hostDir, 'calls.log');
-const HOST_MODE = join(hostDir, 'mode'); // "ok" | "unavailable"
-writeFileSync(HOST_MODE, 'ok');
-const hostScript = join(hostDir, 'host.js');
-writeFileSync(
-  hostScript,
-  `#!${process.execPath}
-const fs = require('fs'), path = require('path');
-const DB = path.join(__dirname, 'db.json');
-let buf = Buffer.alloc(0);
-process.stdin.on('data', (d) => {
-  buf = Buffer.concat([buf, d]);
-  while (buf.length >= 4) {
-    const n = buf.readUInt32LE(0);
-    if (buf.length < 4 + n) break;
-    const msg = JSON.parse(buf.subarray(4, 4 + n).toString());
-    buf = buf.subarray(4 + n);
-    const out = Buffer.from(JSON.stringify(handle(msg)));
-    const h = Buffer.alloc(4); h.writeUInt32LE(out.length);
-    process.stdout.write(Buffer.concat([h, out]));
-  }
-});
-function handle(m) {
-  fs.appendFileSync(${JSON.stringify(HOST_LOG)}, m.op + ' ' + (m.account || '') + ' ' + (m.reason || '') + '\\n');
-  const mode = fs.readFileSync(${JSON.stringify(HOST_MODE)}, 'utf8').trim();
-  const db = fs.existsSync(DB) ? JSON.parse(fs.readFileSync(DB, 'utf8')) : {};
-  if (mode === 'unavailable') return m.op === 'status' ? { ok: true, available: false, reason: 'Touch ID is not set up on this Mac' } : { ok: false, code: 'unavailable', message: 'Touch ID is not set up on this Mac' };
-  switch (m.op) {
-    case 'status': return { ok: true, available: true };
-    case 'enroll': db[m.account] = m.secretB64; fs.writeFileSync(DB, JSON.stringify(db)); return { ok: true };
-    case 'unlock': return db[m.account] ? { ok: true, secretB64: db[m.account] } : { ok: false, code: 'not_enrolled', message: 'Touch ID is not set up for this account' };
-    case 'remove': delete db[m.account]; fs.writeFileSync(DB, JSON.stringify(db)); return { ok: true };
-    default: return { ok: false, code: 'bad_request', message: 'unknown op' };
-  }
-}
-`,
-);
-chmodSync(hostScript, 0o755);
-
 // ------------------------------------------------------------ synthetic account + items
 const EMAIL = `extqa.${Date.now().toString(36)}@example.com`;
 const PASSWORD = 'harbor-quartz-ember-willow-58';
@@ -158,6 +117,7 @@ await setup.logout();
 class Target {
   private id = 0;
   private waiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private handlers = new Map<string, Array<(params: Record<string, unknown>, sessionId?: string) => void>>();
   private constructor(private ws: WebSocket) {
     // A closed window (e.g. the popup closing itself) must fail the step, not hang it.
     ws.addEventListener('close', () => {
@@ -165,7 +125,8 @@ class Target {
       this.waiting.clear();
     });
     ws.addEventListener('message', (ev) => {
-      const m = JSON.parse(String(ev.data)) as { id?: number; result?: unknown; error?: { message: string } };
+      const m = JSON.parse(String(ev.data)) as { id?: number; result?: unknown; error?: { message: string }; method?: string; params?: Record<string, unknown>; sessionId?: string };
+      if (m.method) for (const h of this.handlers.get(m.method) ?? []) h(m.params ?? {}, m.sessionId);
       const w = m.id !== undefined ? this.waiting.get(m.id) : undefined;
       if (!w) return;
       this.waiting.delete(m.id!);
@@ -181,10 +142,14 @@ class Target {
     });
     return new Target(ws);
   }
-  send<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  on(method: string, fn: (params: Record<string, unknown>, sessionId?: string) => void) {
+    this.handlers.set(method, [...(this.handlers.get(method) ?? []), fn]);
+  }
+  /** `sessionId`: a flattened child session of this (browser) connection. */
+  send<T = unknown>(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<T> {
     if (this.ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error('target closed'));
     const id = ++this.id;
-    this.ws.send(JSON.stringify({ id, method, params }));
+    this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
     return new Promise<T>((resolve, reject) => this.waiting.set(id, { resolve: resolve as (v: unknown) => void, reject }));
   }
   async eval<T>(expression: string): Promise<T> {
@@ -199,7 +164,7 @@ class Target {
 
 const PORT = 9300 + Math.floor(Math.random() * 400);
 const profile = join(work, 'profile');
-mkdirSync(join(profile, 'NativeMessagingHosts'), { recursive: true });
+mkdirSync(profile, { recursive: true });
 const proc = spawn(
   chromium.executablePath(),
   [
@@ -297,11 +262,6 @@ try {
     if (!sw) await sleep(200);
   }
   if (!sw) throw new Error('PassVault service worker not found');
-  const extId = await sw.eval<string>('chrome.runtime.id');
-  writeFileSync(
-    join(profile, 'NativeMessagingHosts', 'io.passvault.touchid.json'),
-    JSON.stringify({ name: 'io.passvault.touchid', description: 'QA stand-in', path: hostScript, type: 'stdio', allowed_origins: [`chrome-extension://${extId}/`] }),
-  );
 
   /** Opens `url` in a new foreground tab and returns its page target. */
   async function openTab(url: string): Promise<Target> {
@@ -321,7 +281,7 @@ try {
   async function openPopup(): Promise<Target> {
     for (let i = 0; ; i++) {
       try {
-        await sw!.eval(`chrome.action.openPopup()`);
+        await sw!.eval(`chrome.windows.getLastFocused({ windowTypes: ['normal'] }).then((w) => chrome.action.openPopup({ windowId: w.id }))`);
         break;
       } catch (e) {
         if (i >= 20) throw e;
@@ -332,6 +292,23 @@ try {
     const p = await Target.open(info.webSocketDebuggerUrl);
     await waitFor(p, `document.readyState === 'complete'`);
     return p;
+  }
+  /** The open popup, or a newly opened one. */
+  async function currentPopup(): Promise<Target> {
+    const t = (await targets()).find((x) => x.url.endsWith('/popup.html'));
+    if (!t) return openPopup();
+    const p = await Target.open(t.webSocketDebuggerUrl);
+    await waitFor(p, `document.readyState === 'complete'`);
+    return p;
+  }
+  const unlockWindows = async () => (await targets()).filter((t) => t.url.includes('/unlock.html'));
+  async function until(fn: () => Promise<boolean>, ms: number) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (await fn().catch(() => false)) return true;
+      await sleep(150);
+    }
+    return false;
   }
   const fieldValues = (page: Target, ids: string[]) => page.eval<Record<string, string>>(`Object.fromEntries(${JSON.stringify(ids)}.map((id) => [id, document.getElementById(id).value]))`);
 
@@ -448,61 +425,139 @@ try {
   });
   if (!(await popupOpen())) popup = await openPopup();
 
-  // ---------------------------------------------------------- Touch ID
-  await step('Touch ID: turn on, lock closes the popup, reopening unlocks', async () => {
-    await click(popup, byTab('Settings'));
-    const sw2 = `[...document.querySelectorAll('[role=switch]')].find((s) => (s.getAttribute('aria-labelledby') ? document.getElementById(s.getAttribute('aria-labelledby')).textContent : s.closest('label, div')?.textContent ?? '').includes('Unlock with Touch ID'))`;
-    await click(popup, sw2);
-    check('turn on Touch ID', await waitFor(popup, `${sw2}?.getAttribute('aria-checked') === 'true'`, 10_000));
-    check('the key was handed to the Touch ID host', readFileSync(HOST_LOG, 'utf8').includes('enroll '));
-    await click(popup, byTab('Vault'));
+  // ---------------------------------------------------------- passkey unlock
+  const passkeySwitch = `[...document.querySelectorAll('[role=switch]')].find((s) => (s.getAttribute('aria-labelledby') ? document.getElementById(s.getAttribute('aria-labelledby')).textContent : s.closest('label, div')?.textContent ?? '').includes('Unlock with a passkey'))`;
+  let passkey: { cred: string; prf: string } | null = null;
+  async function lockAndReopen() {
+    popup = await currentPopup();
     await click(popup, byButton('Lock'));
-    await sleep(1500);
-    check('locking closes the popup', !(await popupOpen()));
+    await until(async () => !(await popupOpen()), 3000);
     popup.close();
-    popup = await openPopup();
-    const unlocked = await waitFor(popup, byButton('Lock'), 15_000);
-    await shot(popup, 'ext-2-after-touchid');
-    check('reopening the popup unlocks with Touch ID by itself', unlocked && readFileSync(HOST_LOG, 'utf8').includes('unlock '));
+    return openPopup();
+  }
+  /** The open passkey window (waits for it). */
+  async function passkeyWindow(): Promise<Target> {
+    if (!(await until(async () => (await unlockWindows()).length > 0, 10_000))) throw new Error('no passkey window');
+    const w = await Target.open((await unlockWindows())[0]!.webSocketDebuggerUrl);
+    await waitFor(w, `document.readyState === 'complete'`);
+    return w;
+  }
+  /**
+   * Reloads the passkey window with a hook installed before its scripts: 'record' keeps the
+   * real WebAuthn calls (virtual authenticator) and reports the PRF answer; 'replay' answers
+   * navigator.credentials.get like that passkey; 'cancel' like a user cancelling.
+   */
+  async function reloadWith(w: Target, mode: { kind: 'record' } | { kind: 'replay'; cred: string; prf: string } | { kind: 'cancel' }) {
+    await w.send('Page.enable');
+    await w.send('Runtime.enable');
+    await w.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(() => {
+        const MODE = ${JSON.stringify(mode)};
+        const c = navigator.credentials, oc = c.create.bind(c), og = c.get.bind(c);
+        const b64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+        const unb = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (x) => x.charCodeAt(0)).buffer;
+        const report = (r) => { const f = r && r.getClientExtensionResults().prf?.results?.first; if (f) console.log('__pvqa ' + JSON.stringify({ cred: b64u(r.rawId), prf: b64u(f), origin: JSON.parse(new TextDecoder().decode(r.response.clientDataJSON)).origin })); return r; };
+        if (MODE.kind === 'record') { c.create = async (o) => report(await oc(o)); c.get = async (o) => report(await og(o)); }
+        if (MODE.kind === 'replay') c.get = async () => ({ rawId: unb(MODE.cred), getClientExtensionResults: () => ({ prf: { results: { first: unb(MODE.prf) } } }) });
+        if (MODE.kind === 'cancel') c.get = async () => { throw new DOMException('cancelled', 'NotAllowedError'); };
+      })();`,
+    });
+    await w.send('Page.reload');
+  }
+
+  await step('passkey unlock: turn on in the passkey window', async () => {
+    await click(popup, byTab('Settings'));
+    await click(popup, passkeySwitch);
+    const w = await passkeyWindow();
+    check('turning it on opens the passkey window', true);
+    let seen: { cred: string; prf: string; origin: string } | null = null;
+    w.on('Runtime.consoleAPICalled', (params) => {
+      const v = (params.args as Array<{ value?: unknown }> | undefined)?.[0]?.value;
+      if (typeof v === 'string' && v.startsWith('__pvqa ')) seen = JSON.parse(v.slice(7));
+    });
+    // A real passkey for the page's own code: Chrome's virtual authenticator (user verified, PRF).
+    await w.send('WebAuthn.enable');
+    await w.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', ctap2Version: 'ctap2_1', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, hasPrf: true, automaticPresenceSimulation: true } });
+    await reloadWith(w, { kind: 'record' });
+    await until(async () => !!seen, 10_000);
+    const got = seen as { cred: string; prf: string; origin: string } | null;
+    passkey = got;
+    check('the window creates a passkey with PRF (relying party: the extension)', !!got && got.origin.startsWith('chrome-extension://'), got?.origin);
+    check('the passkey window closes itself when done', await until(async () => (await unlockWindows()).length === 0, 5000));
+    w.close();
+    popup = await currentPopup();
+    await click(popup, byTab('Settings'));
+    check('Settings shows passkey unlock on', await waitFor(popup, `${passkeySwitch}?.getAttribute('aria-checked') === 'true'`, 10_000));
+    await click(popup, byTab('Vault'));
   });
 
-  await step('Touch ID unavailable: master password still works', async () => {
-    writeFileSync(HOST_MODE, 'unavailable');
-    if (!(await popupOpen())) popup = await openPopup();
-    await click(popup, byButton('Lock'));
-    await sleep(1200);
-    if (await popupOpen()) await closePopup(popup);
+  await step('passkey unlock: the lock screen unlocks by itself', async () => {
+    popup = await lockAndReopen();
+    const w = await passkeyWindow();
+    check('opening the locked popup opens the passkey window by itself', true);
+    await reloadWith(w, { kind: 'replay', ...passkey! });
+    check('the passkey window closes after unlocking', await until(async () => (await unlockWindows()).length === 0, 8000));
+    w.close();
+    check('the toolbar popup comes back unlocked', await until(async () => (await popupOpen()) && !!(await (await currentPopup()).eval<boolean>(`!!${byButton('Lock')}`)), 10_000));
+    popup = await currentPopup();
+  });
+
+  await step('no passkey prompt while the vault is unlocked', async () => {
+    if (await popupOpen()) await closePopup(await currentPopup());
+    await sleep(1000); // Chrome refuses to reopen a popup that is still closing
     popup = await openPopup();
-    await waitFor(popup, hasText('PassVault is locked'), 10_000);
-    await sleep(1500);
-    await shot(popup, 'ext-3-touchid-unavailable');
-    const pwField = await waitFor(popup, byLabel('Master password'), 3000);
-    check('lock screen offers the master password when Touch ID cannot be used', pwField);
-    check('lock screen says why Touch ID cannot be used', await popup.eval<boolean>(`${hasText('Touch ID is on but can’t be used right now')} && ${hasText('Touch ID is not set up on this Mac')}`));
+    await waitFor(popup, byButton('Lock'), 10_000);
+    await sleep(2500);
+    check('opening the unlocked popup never opens the passkey window', (await unlockWindows()).length === 0);
+  });
+
+  await step('a different passkey is refused', async () => {
+    popup = await lockAndReopen();
+    const w = await passkeyWindow();
+    await reloadWith(w, { kind: 'replay', cred: passkey!.cred, prf: 'A'.repeat(43) });
+    await until(async () => (await unlockWindows()).length === 0, 8000);
+    w.close();
+    popup = await currentPopup();
+    check('a passkey that does not open the seal leaves the vault locked', await waitFor(popup, byLabel('Master password'), 10_000));
+    await fill(popup, byLabel('Master password'), PASSWORD);
+    await click(popup, byButton('Unlock'));
+    await waitFor(popup, byButton('Lock'), 15_000);
+  });
+
+  await step('"Use master password" in the passkey window', async () => {
+    popup = await lockAndReopen();
+    const w = await passkeyWindow();
+    await reloadWith(w, { kind: 'cancel' });
+    await waitFor(w, hasText('cancelled'), 8000);
+    await shot(w, 'ext-3-passkey-cancelled');
+    await click(w, byButton('Use master password'));
+    w.close();
+    check('the passkey window closes', await until(async () => (await unlockWindows()).length === 0, 5000));
+    popup = await currentPopup();
+    check('the lock screen is back with the master password', await waitFor(popup, byLabel('Master password'), 10_000));
+    await sleep(2000);
+    check('it does not reopen the passkey window by itself', (await unlockWindows()).length === 0);
+    check('the passkey button is still offered', await popup.eval<boolean>(`!!${byButton('Unlock with passkey')}`));
+    await shot(popup, 'ext-4-lock-after-cancel');
     await fill(popup, byLabel('Master password'), PASSWORD);
     await click(popup, byButton('Unlock'));
     check('master password unlocks', await waitFor(popup, byButton('Lock'), 15_000));
   });
 
-  await step('Touch ID host missing entirely: no hang, master password works', async () => {
-    writeFileSync(HOST_MODE, 'ok');
-    rmSync(join(profile, 'NativeMessagingHosts', 'io.passvault.touchid.json'));
-    await click(popup, byButton('Lock'));
-    await sleep(1200);
-    if (await popupOpen()) await closePopup(popup);
-    popup = await openPopup();
-    const ready = await waitFor(popup, byLabel('Master password'), 8000);
-    await shot(popup, 'ext-4-host-missing');
-    check('lock screen usable within a few seconds when the Mac app is missing', ready);
-    check('lock screen points to PassVault for Mac when its Touch ID host is missing', await waitFor(popup, `${hasText('Touch ID is on but can’t be used right now')} && ${hasText('PassVault for Mac')}`, 6000));
+  await step('the master password wins over a waiting passkey window', async () => {
+    popup = await lockAndReopen();
+    await passkeyWindow(); // nobody answers it
+    popup = await currentPopup();
     await fill(popup, byLabel('Master password'), PASSWORD);
     await click(popup, byButton('Unlock'));
-    check('master password unlocks without the Mac app', await waitFor(popup, byButton('Lock'), 15_000));
+    check('unlocked with the master password', await waitFor(popup, byButton('Lock'), 15_000));
+    check('the waiting passkey window is closed (no prompt left behind)', await until(async () => (await unlockWindows()).length === 0, 5000));
   });
 
   const dump = await sw.eval<string>(`chrome.storage.local.get(null).then((r) => JSON.stringify(r))`);
   check('nothing secret in chrome.storage.local', !dump.includes(PASSWORD) && !dump.includes('Personal-Pass-1!') && !dump.includes('4111111111111111') && !dump.includes('123456789012'));
-  if (existsSync(HOST_LOG)) check('Touch ID host never received the master password', !readFileSync(HOST_LOG, 'utf8').includes(PASSWORD));
+  const pk = passkey as { cred: string; prf: string } | null;
+  check('the passkey secret (PRF) is never stored', !!pk && !dump.includes(pk.prf));
   sw.close();
 } finally {
   browserTarget?.close();

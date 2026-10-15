@@ -41,7 +41,7 @@ const suite: Suite = {
           !m.web_accessible_resources &&
           !m.externally_connectable &&
           !perms.includes('nativeMessaging') &&
-          JSON.stringify(m.optional_permissions ?? []) === JSON.stringify(['nativeMessaging']) &&
+          !m.optional_permissions &&
           m.content_security_policy?.extension_pages === "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'";
         return { ok, evidence: `permissions ${perms}; hosts ${JSON.stringify(m.host_permissions)}; optional ${JSON.stringify(m.optional_host_permissions)}; optional permissions ${JSON.stringify(m.optional_permissions)}; content_scripts ${!!m.content_scripts}; web_accessible_resources ${!!m.web_accessible_resources}; externally_connectable ${!!m.externally_connectable}; CSP ${m.content_security_policy?.extension_pages}` };
       }, { severity: 'high' });

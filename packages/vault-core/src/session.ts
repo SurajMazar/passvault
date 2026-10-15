@@ -481,6 +481,8 @@ export class VaultSession {
   }
 
   async unlockWithBiometrics(): Promise<void> {
+    // Already open (e.g. the master password won the race): never ask for a fingerprint.
+    if (this.keys) return;
     if (!this.platform.biometrics || !this.account || !this.store) throw new Error('Biometric unlock is not available');
     const wrapped = await this.store.getMeta<string>(META_BIOMETRIC);
     if (!wrapped) throw new Error('Biometric unlock is not set up on this device');
@@ -516,6 +518,21 @@ export class VaultSession {
 
   async biometricsEnabled(): Promise<boolean> {
     return !!(await this.store?.getMeta<string>(META_BIOMETRIC));
+  }
+
+  /**
+   * Turns biometric unlock off when this device's adapter no longer holds the key it
+   * needs (e.g. the platform switched unlock methods). Returns true if it did.
+   */
+  async reconcileBiometrics(): Promise<boolean> {
+    const b = this.platform.biometrics;
+    if (!b?.hasKey || !this.account || !(await this.biometricsEnabled())) return false;
+    if (await b.hasKey(this.account.user.id)) return false;
+    await this.store?.setMeta(META_BIOMETRIC, null);
+    this.biometricHint = false;
+    const now = this.snapshot.auth;
+    if (now.phase === 'locked' && now.biometricAvailable) this.emit({ auth: { ...now, biometricAvailable: false } });
+    return true;
   }
 
   /**

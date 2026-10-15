@@ -9,8 +9,8 @@ const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
 
 /**
  * Public half of the extension's signing key. It pins the extension ID
- * (hpnpkdckiinjkfjolbfkhbekeknhmdff) for installs from the release zip, so the
- * macOS app can name it in the Touch ID native-messaging host's allowed_origins.
+ * (hpnpkdckiinjkfjolbfkhbekeknhmdff) for installs from the release zip, so it stays
+ * the same across updates (passkey unlock's relying party is the extension origin).
  * The private half is not needed (and not kept): Chrome only checks the ID.
  * Chrome Web Store uploads must not carry it (scripts/zip.mjs makes a store zip).
  */
@@ -46,9 +46,6 @@ export function buildManifest(apiUrl: string) {
     // Requested at runtime only: all sites when the user enables "Offer to save passwords",
     // or one origin when the user switches to another server.
     optional_host_permissions: ['https://*/*', 'http://*/*'],
-    // Requested when the user turns on Touch ID unlock: talks only to PassVault's
-    // own macOS host (io.passvault.touchid), registered by the PassVault app.
-    optional_permissions: ['nativeMessaging'],
     content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
     commands: { _execute_action: { suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' } } },
   };
@@ -95,6 +92,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           popup: resolve(root, 'popup.html'),
+          unlock: resolve(root, 'unlock.html'),
           offscreen: resolve(root, 'offscreen.html'),
           background: resolve(root, 'src/background/index.ts'),
           'save-prompt': resolve(root, 'src/content/save-prompt.ts'),
