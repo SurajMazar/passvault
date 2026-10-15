@@ -103,7 +103,7 @@ await step('register with email code, recovery key and mandatory two-step', asyn
 await step('new-item menu fits in the window and lists every type', async () => {
   await nav(page, 'New item').click();
   const labels = await page.getByRole('menuitem').allTextContents();
-  const want = ['Login', 'Server', 'SSH key', 'Database', 'API credential', 'Environment file', 'Secure note', 'Payment card'];
+  const want = ['Login', 'Server', 'SSH key', 'Database', 'API credential', 'Environment file', 'Secure note', 'Payment card', 'Wi-Fi network'];
   check('new-item menu lists every type', want.every((w) => labels.some((l) => l.trim() === w)), labels.join(', '));
   check('new-item menu fits in the window', await inViewport(page, '[role="menu"]'));
   await page.keyboard.press('Escape');
@@ -182,7 +182,35 @@ await step('payment card: create, masked detail, sidebar section', async () => {
   check('card listed under Payment cards', (await page.getByRole('option', { name: /Team Visa/ }).count()) === 1);
 });
 
+await step('wifi network: password rules, list, QR code', async () => {
+  await nav(page, 'New item').click();
+  await page.getByRole('menuitem', { name: 'Wi-Fi network' }).click();
+  const d = dialog(page);
+  await d.getByLabel('Title').fill('Office Wi-Fi');
+  await d.getByLabel('Network name (SSID)').fill('Office-5G');
+  await d.getByLabel('Password', { exact: true }).fill('short');
+  await d.getByRole('button', { name: 'Create', exact: true }).click();
+  check('a WPA password a router would refuse is not saved', await d.getByText('WPA passwords are 8 to 63 characters').first().isVisible());
+  await d.getByLabel('Password', { exact: true }).fill('correct-horse-office');
+  await d.getByRole('button', { name: 'Create', exact: true }).click();
+  await d.waitFor({ state: 'detached' });
+  const wifiNav = nav(page, /^Wi-Fi networks/);
+  check('Wi-Fi networks in the sidebar', await wifiNav.isVisible());
+  await wifiNav.click();
+  const row = page.getByRole('option', { name: /Office Wi-Fi/ });
+  check('listed with network name and security', /Office-5G · WPA/.test(await row.innerText()), (await row.innerText()).replace(/\s+/g, ' '));
+  await row.click();
+  await page.getByRole('heading', { name: 'Office Wi-Fi' }).waitFor();
+  check('password masked in the detail', !(await page.locator('main').innerText()).includes('correct-horse-office'));
+  await page.getByRole('button', { name: 'Show QR code' }).click();
+  const img = page.getByRole('img', { name: 'QR code to join Office-5G' });
+  check('QR code to join is shown on request', (await img.getAttribute('src'))?.startsWith('data:image/png') ?? false);
+  await page.getByRole('button', { name: 'Hide', exact: true }).click();
+  check('QR code hides again', (await img.count()) === 0);
+});
+
 await step('item actions menu stays inside the window', async () => {
+  await nav(page, /^Payment cards/).click();
   await page.getByRole('option', { name: /Team Visa/ }).click();
   await page.getByRole('button', { name: 'More actions' }).first().click();
   check('actions menu fits in the window', await inViewport(page, '[role="menu"]'));
@@ -238,8 +266,8 @@ await step('sign out, sign in with two-step code; items are still there', async 
   await nav(page, /^Overview/).waitFor({ timeout: 30_000 });
   await nav(page, /^All items/).click();
   await page.getByRole('option', { name: /Team Visa/ }).waitFor({ timeout: 15_000 });
-  const rows = (await page.getByRole('option').allInnerTexts()).filter((t) => /Team Visa|Acme customer portal/.test(t));
-  check('sign in again with two-step code; items synced back', rows.length === 2, `${rows.length} items`);
+  const rows = (await page.getByRole('option').allInnerTexts()).filter((t) => /Team Visa|Acme customer portal|Office Wi-Fi/.test(t));
+  check('sign in again with two-step code; items synced back', rows.length === 3, `${rows.length} items`);
 });
 
 await step('phone width: no sideways scrolling', async () => {

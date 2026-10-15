@@ -18,6 +18,7 @@ export function emptyFields<T extends ItemType>(type: T): ItemFieldsByType[T] {
     env_file: { filename: '.env', content: '', variableNotes: {} },
     secure_note: { content: '' },
     payment_card: { cardholder: '', number: '', expMonth: '', expYear: '', cvv: '', pin: '' },
+    wifi: { ssid: '', password: '', security: 'wpa', hidden: false },
   };
   return structuredClone(f[type]);
 }
@@ -93,6 +94,8 @@ export function itemSubtitle(p: ItemPayload): string {
       return 'Secure note';
     case 'payment_card':
       return [`${cardBrand(p.fields.number)} ${maskCard(p.fields.number)}`.trim(), cardExpiryLabel(p.fields) && `exp ${cardExpiryLabel(p.fields)}`].filter(Boolean).join(' · ');
+    case 'wifi':
+      return [p.fields.ssid, p.fields.security === 'none' ? 'open' : p.fields.security.toUpperCase(), p.fields.hidden && 'hidden'].filter(Boolean).join(' · ');
   }
 }
 

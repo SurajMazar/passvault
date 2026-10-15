@@ -10,12 +10,14 @@ import {
   TLS_MODES,
   URL_MATCH_LABELS,
   URL_MATCH_MODES,
+  WIFI_SECURITY,
+  WIFI_SECURITY_LABELS,
   type CustomField,
   type ItemPayload,
 } from '@passvault/types';
 import { generatePassword } from '@passvault/crypto';
 import { isValidHost, isValidSshUsername, itemPayloadSchema } from '@passvault/validation';
-import { Banner, Button, Dialog, Field, IconButton, Input, SecretInput, Select, StrengthMeter, TagInput, TextArea, useToast } from '@passvault/ui';
+import { Banner, Button, Dialog, Field, IconButton, Input, SecretInput, Select, StrengthMeter, Switch, TagInput, TextArea, useToast } from '@passvault/ui';
 import { newItem, passwordStrength, IDENTIFIER_MAX, cardBrand, cardDigits, luhnValid } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { sshPublicKeyInfo } from './ssh-keys';
@@ -328,6 +330,8 @@ export function ItemEditor() {
 
         {draft.type === 'payment_card' && <CardFields f={f} setF={setF} err={err} />}
 
+        {draft.type === 'wifi' && <WifiFieldsEditor f={f} setF={setF} err={err} />}
+
         {draft.type === 'secure_note' && (
           <Field label="Note" hint="Plain text. Shown as text only — HTML and scripts are never rendered.">
             {(id, d) => <TextArea id={id} aria-describedby={d} rows={10} value={f.content as string} onChange={(e) => setF({ content: e.target.value })} />}
@@ -565,6 +569,37 @@ function CardFields({ f, setF, err }: { f: Record<string, unknown>; setF: (patch
           {(id) => <SecretInput id={id} value={String(f.pin ?? '')} onChange={(v) => setF({ pin: v.slice(0, 32) })} />}
         </Field>
       </Row>
+    </>
+  );
+}
+
+/** Wi-Fi network: name, password (what routers accept is checked on save), security, hidden. */
+function WifiFieldsEditor({ f, setF, err }: { f: Record<string, unknown>; setF: (patch: Record<string, unknown>) => void; err: (path: string) => string | null }) {
+  const security = String(f.security ?? 'wpa');
+  return (
+    <>
+      <Field label="Network name (SSID)" error={err('ssid')}>
+        {(id) => <Input id={id} value={String(f.ssid ?? '')} onChange={(e) => setF({ ssid: e.target.value })} placeholder="e.g. Home-5G" />}
+      </Field>
+      <Row>
+        <Field label="Security" error={err('security')}>
+          {(id) => (
+            <Select id={id} value={security} onChange={(e) => setF({ security: e.target.value, ...(e.target.value === 'none' ? { password: '' } : {}) })}>
+              {WIFI_SECURITY.map((s) => (
+                <option key={s} value={s}>
+                  {WIFI_SECURITY_LABELS[s]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {security !== 'none' && (
+          <Field label="Password" error={err('password')} hint={security === 'wpa' ? '8 to 63 characters' : '5 or 13 characters (10 or 26 hex digits)'}>
+            {(id) => <SecretInput id={id} value={String(f.password ?? '')} onChange={(v) => setF({ password: v })} trailing={<GenButton onGen={(v) => setF({ password: v })} />} />}
+          </Field>
+        )}
+      </Row>
+      <Switch checked={!!f.hidden} onChange={(v) => setF({ hidden: v })} label="Hidden network" description="The network does not broadcast its name; devices must be told to look for it." />
     </>
   );
 }

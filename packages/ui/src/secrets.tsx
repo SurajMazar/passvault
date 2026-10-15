@@ -13,10 +13,11 @@ import {
   Server,
   StickyNote,
   CreditCard,
+  Wifi,
 } from 'lucide-react';
 import { Badge, IconButton, cx, inputBase } from './primitives';
 
-export type ItemTypeKey = 'login' | 'ssh_connection' | 'ssh_key' | 'database' | 'api_credential' | 'env_file' | 'secure_note' | 'payment_card' | 'project';
+export type ItemTypeKey = 'login' | 'ssh_connection' | 'ssh_key' | 'database' | 'api_credential' | 'env_file' | 'secure_note' | 'payment_card' | 'wifi' | 'project';
 
 const TYPE_ICON = {
   login: Globe,
@@ -27,6 +28,7 @@ const TYPE_ICON = {
   env_file: FileCode2,
   secure_note: StickyNote,
   payment_card: CreditCard,
+  wifi: Wifi,
   project: FolderKanban,
 } as const;
 
@@ -39,6 +41,7 @@ const TYPE_TINT: Record<ItemTypeKey, string> = {
   env_file: 'bg-teal-500/14 text-teal-700 dark:text-teal-300',
   secure_note: 'bg-slate-500/14 text-slate-600 dark:text-slate-300',
   payment_card: 'bg-indigo-500/14 text-indigo-600 dark:text-indigo-300',
+  wifi: 'bg-cyan-500/14 text-cyan-700 dark:text-cyan-300',
   project: 'bg-indigo-500/12 text-indigo-600 dark:text-indigo-300',
 };
 

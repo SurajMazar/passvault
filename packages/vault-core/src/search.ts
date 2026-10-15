@@ -42,6 +42,9 @@ export function searchableText(p: ItemPayload): string {
       // brand and last four digits only: the full number, CVV and PIN are secret
       parts.push(p.fields.cardholder, cardBrand(p.fields.number), cardLast4(p.fields.number));
       break;
+    case 'wifi':
+      parts.push(p.fields.ssid); // never the password
+      break;
   }
   return parts.join('\n').toLowerCase();
 }

@@ -118,3 +118,23 @@ describe('payment card payloads', () => {
     }
   });
 });
+
+describe('wifi payloads', () => {
+  const base = { v: 1, type: 'wifi', title: 'Home', description: '', notes: '', folder: '', tags: [], favorite: false, archived: false, trashedAt: null, customFields: [] };
+  const ok = (fields: Record<string, unknown>) => itemPayloadSchema.safeParse({ ...base, fields: { ssid: 'Home-5G', password: '', security: 'wpa', hidden: false, ...fields } }).success;
+  it('accepts what routers accept', () => {
+    expect(ok({ password: 'correct-horse' })).toBe(true);
+    expect(ok({ password: 'a'.repeat(63) })).toBe(true);
+    expect(ok({ password: 'ab'.repeat(32) })).toBe(true); // 64 hex digits (raw WPA key)
+    expect(ok({ security: 'wep', password: 'abcde' })).toBe(true);
+    expect(ok({ security: 'wep', password: '0123456789' })).toBe(true);
+    expect(ok({ security: 'none', password: '', hidden: true })).toBe(true);
+  });
+  it('rejects passwords a router would refuse, and a missing name', () => {
+    expect(ok({ password: 'short' })).toBe(false);
+    expect(ok({ password: 'x'.repeat(64) })).toBe(false); // 64 characters that are not hex
+    expect(ok({ security: 'wep', password: 'abcdef' })).toBe(false);
+    expect(ok({ ssid: '', password: 'correct-horse' })).toBe(false);
+    expect(ok({ security: 'wpa3', password: 'correct-horse' })).toBe(false);
+  });
+});

@@ -218,7 +218,7 @@ async function main() {
     check(alice2.session.getSnapshot().projects.some((p) => p.payload.name === 'Storefront'), 'device 2 sees the project');
   });
 
-  await scenario('8. Cards, passkeys, extra login fields and identifiers sync; unknown future fields survive edits', async () => {
+  await scenario('8. Cards, Wi-Fi, passkeys, extra login fields and identifiers sync; unknown future fields survive edits', async () => {
     await alice.session.saveItem(
       newItem('payment_card', {
         title: 'Team Visa',
@@ -255,6 +255,11 @@ async function main() {
     await alice.session.syncNow();
     await alice2.session.syncNow();
 
+    await alice.session.saveItem(newItem('wifi', { title: 'Office Wi-Fi', fields: { ssid: 'Office-5G', password: 'correct-horse-office', security: 'wpa', hidden: true } }));
+    await alice.session.syncNow();
+    await alice2.session.syncNow();
+    const wifi = item(alice2, 'Office Wi-Fi');
+    check(wifi?.payload.type === 'wifi' && wifi.payload.fields.ssid === 'Office-5G' && wifi.payload.fields.password === 'correct-horse-office' && wifi.payload.fields.hidden, 'Wi-Fi network synced');
     const card = item(alice2, 'Team Visa');
     check(card?.payload.type === 'payment_card', 'card synced to device 2');
     check(card.payload.fields.number === '4111111111111111' && card.payload.fields.cvv === '123' && itemIdentifier(card.payload) === 'ops-visa', 'card fields and identifier intact');
@@ -275,7 +280,7 @@ async function main() {
     check(Array.isArray(back.fields.passkeys) && (back.fields.passkeys as unknown[]).length === 1, 'passkey preserved through edit');
 
     const blob = JSON.stringify(await alice.session.api.sync('0'));
-    for (const s of ['4111111111111111', '123456789012', 'aws-prod-root', passkey.privateKey]) check(!blob.includes(s), `sync response leaks "${s}"`);
+    for (const s of ['4111111111111111', '123456789012', 'aws-prod-root', passkey.privateKey, 'Office-5G', 'correct-horse-office']) check(!blob.includes(s), `sync response leaks "${s}"`);
   });
 
   await scenario('11. Share a project with another user and enforce editing permissions', async () => {

@@ -12,6 +12,7 @@ export const ITEM_TYPES = [
   'env_file',
   'secure_note',
   'payment_card',
+  'wifi',
 ] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
@@ -24,6 +25,7 @@ export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
   env_file: 'Environment file',
   secure_note: 'Secure note',
   payment_card: 'Payment card',
+  wifi: 'Wi-Fi network',
 };
 
 export const STANDARD_ENVIRONMENTS = ['development', 'staging', 'production'] as const;
@@ -207,6 +209,20 @@ export interface PaymentCardFields {
   pin: string;
 }
 
+export const WIFI_SECURITY = ['wpa', 'wep', 'none'] as const;
+export type WifiSecurity = (typeof WIFI_SECURITY)[number];
+export const WIFI_SECURITY_LABELS: Record<WifiSecurity, string> = { wpa: 'WPA / WPA2 / WPA3', wep: 'WEP (old)', none: 'None (open network)' };
+
+/** A Wi-Fi network (0.1.22+; older clients keep it untouched). */
+export interface WifiFields {
+  /** network name (SSID) */
+  ssid: string;
+  password: string;
+  security: WifiSecurity;
+  /** the network does not broadcast its name */
+  hidden: boolean;
+}
+
 export interface ItemFieldsByType {
   login: LoginFields;
   ssh_connection: SshConnectionFields;
@@ -216,6 +232,7 @@ export interface ItemFieldsByType {
   env_file: EnvFileFields;
   secure_note: SecureNoteFields;
   payment_card: PaymentCardFields;
+  wifi: WifiFields;
 }
 
 export interface ItemCommon {
@@ -290,4 +307,5 @@ export const SECRET_FIELDS: { [K in ItemType]: Array<keyof ItemFieldsByType[K]> 
   env_file: ['content'],
   secure_note: ['content'],
   payment_card: ['number', 'cvv', 'pin'],
+  wifi: ['password'],
 };

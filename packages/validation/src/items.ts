@@ -7,6 +7,7 @@ import {
   SSH_AUTH_METHODS,
   TLS_MODES,
   URL_MATCH_MODES,
+  WIFI_SECURITY,
   type ItemPayload,
   type ProjectPayload,
   type UserSettingsPayload,
@@ -205,6 +206,25 @@ export const itemPayloadSchema = z.discriminatedUnion('type', [
       cvv: z.string().regex(/^\d{0,4}$/, 'security code must be 3 or 4 digits'),
       pin: secret(32),
     }),
+  }),
+  z.looseObject({
+    ...common,
+    type: z.literal('wifi'),
+    fields: z
+      .looseObject({
+        ssid: z.string().min(1, 'network name is required').max(64),
+        password: secret(128),
+        security: z.enum(WIFI_SECURITY),
+        hidden: z.boolean(),
+      })
+      .superRefine((f, ctx) => {
+        // What routers accept: WPA 8–63 characters (or 64 hex digits), WEP 5/13 characters (or 10/26 hex digits).
+        const pw = f.password;
+        if (f.security === 'wpa' && !(pw.length >= 8 && pw.length <= 63) && !/^[0-9a-f]{64}$/i.test(pw))
+          ctx.addIssue({ code: 'custom', path: ['password'], message: 'WPA passwords are 8 to 63 characters' });
+        if (f.security === 'wep' && ![5, 13].includes(pw.length) && !/^([0-9a-f]{10}|[0-9a-f]{26})$/i.test(pw))
+          ctx.addIssue({ code: 'custom', path: ['password'], message: 'WEP keys are 5 or 13 characters (10 or 26 hex digits)' });
+      }),
   }),
 ]) satisfies z.ZodType<ItemPayload>;
 

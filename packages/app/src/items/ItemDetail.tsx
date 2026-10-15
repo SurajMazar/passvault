@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import QRCode from 'qrcode';
 import {
   Archive,
   ArchiveRestore,
@@ -18,9 +19,9 @@ import {
   AlertTriangle,
   KeyRound,
 } from 'lucide-react';
-import { ITEM_TYPE_LABELS, URL_MATCH_LABELS, isProductionEnvironment, type ItemPayload } from '@passvault/types';
+import { ITEM_TYPE_LABELS, URL_MATCH_LABELS, WIFI_SECURITY_LABELS, isProductionEnvironment, type ItemPayload, type WifiFields } from '@passvault/types';
 import { Badge, Banner, Button, Card, EnvBadge, FieldRow, IconButton, Menu, TypeIcon, cx, useConfirm, useToast } from '@passvault/ui';
-import { safeHost, type DecryptedItem, cardBrand, cardExpiresAt, cardExpiryLabel } from '@passvault/vault-core';
+import { safeHost, type DecryptedItem, cardBrand, cardExpiresAt, cardExpiryLabel, wifiQrText } from '@passvault/vault-core';
 import { useApp, useSnapshot, useUi, errorMessage } from '../state';
 import { EnvFileView } from '../env/EnvFileView';
 
@@ -154,6 +155,15 @@ function Fields({ item }: { item: DecryptedItem }) {
       );
       break;
     }
+    case 'wifi':
+      rows.push(
+        <FieldRow key="s" label="Network name" value={p.fields.ssid} mono onCopy={(v) => copy(v, false)} />,
+        <FieldRow key="p" label="Password" value={p.fields.password} secret mono onCopy={(v) => copy(v)} />,
+        <FieldRow key="sec" label="Security" value={WIFI_SECURITY_LABELS[p.fields.security] ?? p.fields.security} />,
+        <FieldRow key="h" label="Hidden network" value={p.fields.hidden ? 'Yes' : ''} />,
+        <WifiQr key="qr" fields={p.fields} />,
+      );
+      break;
     case 'env_file':
       break;
   }
@@ -440,5 +450,35 @@ function Passkeys({ item }: { item: DecryptedItem & { payload: ItemPayload<'logi
       </ul>
       <p className="pt-2 text-xs text-fg-subtle">Sign in with these from the PassVault browser extension (Settings → Save and use passkeys).</p>
     </Card>
+  );
+}
+
+/** "Join with a phone": the network's QR code, shown on request (it contains the password) and hidden again after a minute. */
+function WifiQr({ fields }: { fields: WifiFields }) {
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!qr) return;
+    const t = setTimeout(() => setQr(null), 60_000);
+    return () => clearTimeout(t);
+  }, [qr]);
+  return (
+    <div className="border-b border-border px-1 py-3">
+      <div className="mb-1.5 text-xs font-medium text-fg-muted">Join from a phone</div>
+      {qr ? (
+        <div className="flex items-end gap-3">
+          <div className="rounded-lg border border-border bg-white p-2">
+            <img src={qr} alt={`QR code to join ${fields.ssid}`} width={168} height={168} />
+          </div>
+          <Button size="sm" onClick={() => setQr(null)}>
+            Hide
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" onClick={() => void QRCode.toDataURL(wifiQrText(fields), { margin: 1, width: 168 }).then(setQr)}>
+          Show QR code
+        </Button>
+      )}
+      <p className="mt-1.5 text-xs text-fg-subtle">Point the phone’s camera at the code to join. It contains the password, so it hides itself after a minute.</p>
+    </div>
   );
 }

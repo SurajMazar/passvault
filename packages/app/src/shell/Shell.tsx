@@ -47,6 +47,7 @@ const TYPE_NAV_LABELS: Record<ItemType, string> = {
   api_credential: 'API credentials',
   env_file: 'Environment files',
   secure_note: 'Secure notes',
+  wifi: 'Wi-Fi networks',
 };
 const TYPE_NAV = (Object.entries(TYPE_NAV_LABELS) as Array<[ItemType, string]>).map(([id, label]) => ({ id, label }));
 

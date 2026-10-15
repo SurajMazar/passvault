@@ -107,6 +107,17 @@ expiry (`vault-core/src/cards.ts`); expired and soon-expiring cards (60 days) ap
 in the health overview. Versions before 0.1.18 do not know the type and list cards
 as "created by a newer client".
 
+## Wi-Fi networks (`wifi`, 0.1.22)
+
+Fields: `ssid` (network name, 1–64 characters), `password` (secret), `security`
+(`wpa` = WPA/WPA2/WPA3, `wep`, `none`) and `hidden`. Saving checks what routers accept:
+WPA 8–63 characters or 64 hex digits, WEP 5/13 characters or 10/26 hex digits. Lists
+and search see the network name only. Wi-Fi passwords count in the weak and reused
+checks. The detail view shows a "join this network" QR code on request
+(`WIFI:T:…;S:…;P:…;H:…;;`, `vault-core/src/wifi.ts`); it hides itself after a minute.
+Versions before 0.1.22 list Wi-Fi networks as "created by a newer client" and leave
+them untouched.
+
 ## Passkeys on logins (`fields.passkeys`, 0.1.20)
 
 An optional array on login items: `{ credentialId, rpId, rpName, userHandle,

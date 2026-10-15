@@ -54,6 +54,8 @@ function passwordsOf(p: ItemPayload): string[] {
       return p.fields.password ? [p.fields.password] : [];
     case 'api_credential':
       return p.fields.password ? [p.fields.password] : [];
+    case 'wifi':
+      return p.fields.password ? [p.fields.password] : [];
     default:
       return [];
   }
